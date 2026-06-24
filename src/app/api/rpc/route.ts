@@ -77,6 +77,16 @@ export async function POST(request: Request) {
     );
   }
 
+  if (chain.family !== "EVM") {
+    return NextResponse.json(
+      {
+        error: `${chain.name} is available through Pocket, but this lesson uses EVM JSON-RPC methods. Choose an EVM network for the current lesson.`,
+        endpoint: endpointFor(chain.slug),
+      },
+      { status: 400 },
+    );
+  }
+
   const paramError = validateParams(method, params);
   if (paramError) {
     return NextResponse.json({ error: paramError }, { status: 400 });

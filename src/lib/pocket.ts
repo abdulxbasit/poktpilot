@@ -2,9 +2,9 @@ export type Chain = {
   slug: string;
   name: string;
   shortName: string;
-  color: string;
+  logo: string;
   nativeSymbol: string;
-  family: "EVM";
+  family: "EVM" | "Cosmos" | "Solana" | "Near" | "Sui" | "Tron";
   testnet?: boolean;
 };
 
@@ -29,53 +29,178 @@ export type AllowedMethod =
 
 export const CHAINS: Chain[] = [
   {
-    slug: "eth",
-    name: "Ethereum",
-    shortName: "ETH",
-    color: "#627eea",
-    nativeSymbol: "ETH",
-    family: "EVM",
+    slug: "akash", name: "Akash", shortName: "AKT", logo: "akash", nativeSymbol: "AKT", family: "Cosmos",
   },
   {
-    slug: "base",
-    name: "Base",
-    shortName: "BASE",
-    color: "#0052ff",
-    nativeSymbol: "ETH",
-    family: "EVM",
+    slug: "arb-one", name: "Arbitrum One", shortName: "ARB", logo: "arbitrum", nativeSymbol: "ETH", family: "EVM",
   },
   {
-    slug: "arb-one",
-    name: "Arbitrum",
-    shortName: "ARB",
-    color: "#28a0f0",
-    nativeSymbol: "ETH",
-    family: "EVM",
+    slug: "arb-sepolia-testnet", name: "Arbitrum One Sepolia", shortName: "ARB SEP", logo: "arbitrum", nativeSymbol: "ETH", family: "EVM", testnet: true,
   },
   {
-    slug: "op",
-    name: "Optimism",
-    shortName: "OP",
-    color: "#ff0420",
-    nativeSymbol: "ETH",
-    family: "EVM",
+    slug: "atomone", name: "AtomOne", shortName: "ATONE", logo: "atomone", nativeSymbol: "ATONE", family: "Cosmos",
   },
   {
-    slug: "poly",
-    name: "Polygon",
-    shortName: "POLY",
-    color: "#8247e5",
-    nativeSymbol: "POL",
-    family: "EVM",
+    slug: "avax", name: "Avalanche C-Chain", shortName: "AVAX", logo: "avax", nativeSymbol: "AVAX", family: "EVM",
   },
   {
-    slug: "eth-sepolia-testnet",
-    name: "Sepolia",
-    shortName: "SEP",
-    color: "#8b5cf6",
-    nativeSymbol: "ETH",
-    family: "EVM",
-    testnet: true,
+    slug: "base", name: "Base", shortName: "BASE", logo: "base", nativeSymbol: "ETH", family: "EVM",
+  },
+  {
+    slug: "base-sepolia-testnet", name: "Base Sepolia", shortName: "BASE SEP", logo: "base", nativeSymbol: "ETH", family: "EVM", testnet: true,
+  },
+  {
+    slug: "bera", name: "Berachain", shortName: "BERA", logo: "berachain", nativeSymbol: "BERA", family: "EVM",
+  },
+  {
+    slug: "blast", name: "Blast", shortName: "BLAST", logo: "blast", nativeSymbol: "ETH", family: "EVM",
+  },
+  {
+    slug: "boba", name: "Boba", shortName: "BOBA", logo: "boba", nativeSymbol: "ETH", family: "EVM",
+  },
+  {
+    slug: "bsc", name: "BNB", shortName: "BNB", logo: "bnb", nativeSymbol: "BNB", family: "EVM",
+  },
+  {
+    slug: "celo", name: "Celo", shortName: "CELO", logo: "celo", nativeSymbol: "CELO", family: "EVM",
+  },
+  {
+    slug: "cheqd", name: "Cheqd", shortName: "CHEQ", logo: "cheqd", nativeSymbol: "CHEQ", family: "Cosmos",
+  },
+  {
+    slug: "chihuahua", name: "Chihuahua", shortName: "HUAHUA", logo: "chihuahua", nativeSymbol: "HUAHUA", family: "Cosmos",
+  },
+  {
+    slug: "eth", name: "Ethereum", shortName: "ETH", logo: "ethereum", nativeSymbol: "ETH", family: "EVM",
+  },
+  {
+    slug: "eth-sepolia-testnet", name: "Ethereum Sepolia", shortName: "SEP", logo: "ethereum", nativeSymbol: "ETH", family: "EVM", testnet: true,
+  },
+  {
+    slug: "fantom", name: "Fantom", shortName: "FTM", logo: "fantom", nativeSymbol: "FTM", family: "EVM",
+  },
+  {
+    slug: "fetch", name: "Fetch", shortName: "ASI", logo: "asi", nativeSymbol: "ASI", family: "Cosmos",
+  },
+  {
+    slug: "fraxtal", name: "Fraxtal", shortName: "FRAX", logo: "fraxtal", nativeSymbol: "frxETH", family: "EVM",
+  },
+  {
+    slug: "fuse", name: "Fuse", shortName: "FUSE", logo: "fuse", nativeSymbol: "FUSE", family: "EVM",
+  },
+  {
+    slug: "gnosis", name: "Gnosis", shortName: "GNO", logo: "gnosis", nativeSymbol: "xDAI", family: "EVM",
+  },
+  {
+    slug: "giwa-sepolia-testnet", name: "GIWA Sepolia", shortName: "GIWA SEP", logo: "giwa", nativeSymbol: "ETH", family: "EVM", testnet: true,
+  },
+  {
+    slug: "harmony", name: "Harmony", shortName: "ONE", logo: "harmony", nativeSymbol: "ONE", family: "EVM",
+  },
+  {
+    slug: "hyperliquid", name: "Hyperliquid", shortName: "HYPE", logo: "hyperliquid", nativeSymbol: "HYPE", family: "EVM",
+  },
+  {
+    slug: "ink", name: "Ink", shortName: "INK", logo: "ink", nativeSymbol: "ETH", family: "EVM",
+  },
+  {
+    slug: "iotex", name: "IoTeX", shortName: "IOTX", logo: "iotex", nativeSymbol: "IOTX", family: "EVM",
+  },
+  {
+    slug: "juno", name: "Juno", shortName: "JUNO", logo: "juno", nativeSymbol: "JUNO", family: "Cosmos",
+  },
+  {
+    slug: "kaia", name: "Kaia", shortName: "KAIA", logo: "kaia", nativeSymbol: "KAIA", family: "EVM",
+  },
+  {
+    slug: "kava", name: "Kava", shortName: "KAVA", logo: "kava", nativeSymbol: "KAVA", family: "EVM",
+  },
+  {
+    slug: "linea", name: "Linea", shortName: "LINEA", logo: "linea", nativeSymbol: "ETH", family: "EVM",
+  },
+  {
+    slug: "metis", name: "Metis", shortName: "METIS", logo: "metis", nativeSymbol: "METIS", family: "EVM",
+  },
+  {
+    slug: "moonbeam", name: "Moonbeam", shortName: "GLMR", logo: "moonbeam", nativeSymbol: "GLMR", family: "EVM",
+  },
+  {
+    slug: "moonriver", name: "Moonriver", shortName: "MOVR", logo: "moonriver", nativeSymbol: "MOVR", family: "EVM",
+  },
+  {
+    slug: "near", name: "Near", shortName: "NEAR", logo: "near", nativeSymbol: "NEAR", family: "Near",
+  },
+  {
+    slug: "oasys", name: "Oasys", shortName: "OAS", logo: "oasys", nativeSymbol: "OAS", family: "EVM",
+  },
+  {
+    slug: "op", name: "Optimism", shortName: "OP", logo: "op", nativeSymbol: "ETH", family: "EVM",
+  },
+  {
+    slug: "op-sepolia-testnet", name: "Optimism Sepolia", shortName: "OP SEP", logo: "op", nativeSymbol: "ETH", family: "EVM", testnet: true,
+  },
+  {
+    slug: "opbnb", name: "opBNB", shortName: "opBNB", logo: "bnb", nativeSymbol: "BNB", family: "EVM",
+  },
+  {
+    slug: "osmosis", name: "Osmosis", shortName: "OSMO", logo: "osmosis", nativeSymbol: "OSMO", family: "Cosmos",
+  },
+  {
+    slug: "persistence", name: "Persistence", shortName: "XPRT", logo: "persistence", nativeSymbol: "XPRT", family: "Cosmos",
+  },
+  {
+    slug: "pocket", name: "Pocket", shortName: "POKT", logo: "pokt", nativeSymbol: "POKT", family: "Cosmos",
+  },
+  {
+    slug: "poly", name: "Polygon", shortName: "POL", logo: "pol", nativeSymbol: "POL", family: "EVM",
+  },
+  {
+    slug: "poly-amoy-testnet", name: "Polygon Amoy", shortName: "AMOY", logo: "pol", nativeSymbol: "POL", family: "EVM", testnet: true,
+  },
+  {
+    slug: "poly-zkevm", name: "Polygon zkEVM", shortName: "zkEVM", logo: "pol", nativeSymbol: "ETH", family: "EVM",
+  },
+  {
+    slug: "scroll", name: "Scroll", shortName: "SCR", logo: "scroll", nativeSymbol: "ETH", family: "EVM",
+  },
+  {
+    slug: "seda", name: "SEDA", shortName: "SEDA", logo: "seda", nativeSymbol: "SEDA", family: "Cosmos",
+  },
+  {
+    slug: "sei", name: "Sei", shortName: "SEI", logo: "sei", nativeSymbol: "SEI", family: "EVM",
+  },
+  {
+    slug: "shentu", name: "Shentu", shortName: "CTK", logo: "shentu", nativeSymbol: "CTK", family: "Cosmos",
+  },
+  {
+    slug: "solana", name: "Solana", shortName: "SOL", logo: "sol", nativeSymbol: "SOL", family: "Solana",
+  },
+  {
+    slug: "sonic", name: "Sonic", shortName: "S", logo: "sonic", nativeSymbol: "S", family: "EVM",
+  },
+  {
+    slug: "sui", name: "Sui", shortName: "SUI", logo: "sui", nativeSymbol: "SUI", family: "Sui",
+  },
+  {
+    slug: "taiko", name: "Taiko", shortName: "TAIKO", logo: "taiko", nativeSymbol: "ETH", family: "EVM",
+  },
+  {
+    slug: "tron", name: "Tron", shortName: "TRX", logo: "tron", nativeSymbol: "TRX", family: "Tron",
+  },
+  {
+    slug: "unichain", name: "Unichain", shortName: "UNI", logo: "unichain", nativeSymbol: "ETH", family: "EVM",
+  },
+  {
+    slug: "xrplevm", name: "XRPL EVM", shortName: "XRPL", logo: "xrp", nativeSymbol: "XRP", family: "EVM",
+  },
+  {
+    slug: "xrplevm-testnet", name: "XRPL EVM TestNet", shortName: "XRPL TEST", logo: "xrp", nativeSymbol: "XRP", family: "EVM", testnet: true,
+  },
+  {
+    slug: "zklink-nova", name: "zkLink", shortName: "ZKL", logo: "zklink", nativeSymbol: "ETH", family: "EVM",
+  },
+  {
+    slug: "zksync-era", name: "zkSync Era", shortName: "ZK", logo: "zksync", nativeSymbol: "ETH", family: "EVM",
   },
 ];
 
@@ -200,8 +325,9 @@ export function parseNaturalLanguage(input: string) {
     CHAINS.find(
       (item) =>
         normalized.includes(item.name.toLowerCase()) ||
-        normalized.includes(item.shortName.toLowerCase()),
-    ) ?? CHAINS[0];
+        (item.shortName.length >= 3 &&
+          normalized.includes(item.shortName.toLowerCase())),
+    ) ?? getChain("eth")!;
 
   let recipe = RECIPES[0];
   if (normalized.includes("balance") || normalized.includes("wallet")) {

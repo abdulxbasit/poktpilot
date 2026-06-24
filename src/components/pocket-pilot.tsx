@@ -29,6 +29,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import Image from "next/image";
 import {
   type CSSProperties,
   useEffect,
@@ -170,13 +171,20 @@ export function PocketPilot() {
     }
     return null;
   }, [parameter, recipe.id]);
+  const compatibilityError =
+    chain.family === "EVM"
+      ? null
+      : `${chain.name} is available through Pocket's ${chain.family} endpoint. The current lessons teach EVM JSON-RPC, so choose an EVM network to run this recipe.`;
+  const queryError = compatibilityError ?? validationError;
 
-  const code = createCodeSnippet(
-    language,
-    endpointFor(chain.slug),
-    recipe.method,
-    params,
-  );
+  const code = compatibilityError
+    ? `// ${chain.name} is available through Pocket.\n// ${chain.family}-specific learning recipes are coming next.\n\nconst endpoint = "${endpointFor(chain.slug)}";`
+    : createCodeSnippet(
+        language,
+        endpointFor(chain.slug),
+        recipe.method,
+        params,
+      );
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -217,7 +225,7 @@ export function PocketPilot() {
   }
 
   async function runQuery() {
-    if (validationError) return;
+    if (queryError) return;
     setPayload(null);
     startTransition(async () => {
       try {
@@ -422,7 +430,7 @@ export function PocketPilot() {
                     event.key === "Enter" &&
                     (event.metaKey || event.ctrlKey) &&
                     !isPending &&
-                    !validationError
+                    !queryError
                   ) {
                     event.preventDefault();
                     runQuery();
@@ -439,30 +447,16 @@ export function PocketPilot() {
                 </div>
 
                 <div className="field-grid">
-                  <label className="field">
+                  <div className="field">
                     <span>Network</span>
-                    <div className="select-wrap">
-                      <span
-                        className="chain-dot"
-                        style={{ backgroundColor: chain.color }}
-                      />
-                      <select
-                        value={chainSlug}
-                        onChange={(event) => {
-                          setChainSlug(event.target.value);
-                          setPayload(null);
-                        }}
-                      >
-                        {CHAINS.map((item) => (
-                          <option key={item.slug} value={item.slug}>
-                            {item.name}
-                            {item.testnet ? " (testnet)" : ""}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown size={16} />
-                    </div>
-                  </label>
+                    <ChainSelector
+                      value={chainSlug}
+                      onChange={(slug) => {
+                        setChainSlug(slug);
+                        setPayload(null);
+                      }}
+                    />
+                  </div>
 
                   <label className="field">
                     <span>Recipe</span>
@@ -518,6 +512,16 @@ export function PocketPilot() {
                   </label>
                 ) : null}
 
+                {compatibilityError ? (
+                  <div className="compatibility-note">
+                    <CircleHelp size={17} />
+                    <div>
+                      <strong>{chain.family} endpoint selected</strong>
+                      <p>{compatibilityError}</p>
+                    </div>
+                  </div>
+                ) : null}
+
                 <div className="endpoint-row">
                   <div>
                     <Server size={15} />
@@ -526,29 +530,43 @@ export function PocketPilot() {
                   <span className="read-only">read only</span>
                 </div>
 
-                <div className="request-preview">
-                  <div className="code-header">
-                    <span>JSON-RPC 2.0 request</span>
-                    <span>POST</span>
+                {compatibilityError ? (
+                  <div className="protocol-preview">
+                    <Network size={24} />
+                    <div>
+                      <span>Pocket endpoint available</span>
+                      <strong>{endpointFor(chain.slug)}</strong>
+                      <p>
+                        Select an EVM network to compose and run the current
+                        JSON-RPC lesson.
+                      </p>
+                    </div>
                   </div>
-                  <pre>
-                    {JSON.stringify(
-                      {
-                        jsonrpc: "2.0",
-                        method: recipe.method,
-                        params,
-                        id: 1,
-                      },
-                      null,
-                      2,
-                    )}
-                  </pre>
-                </div>
+                ) : (
+                  <div className="request-preview">
+                    <div className="code-header">
+                      <span>JSON-RPC 2.0 request</span>
+                      <span>POST</span>
+                    </div>
+                    <pre>
+                      {JSON.stringify(
+                        {
+                          jsonrpc: "2.0",
+                          method: recipe.method,
+                          params,
+                          id: 1,
+                        },
+                        null,
+                        2,
+                      )}
+                    </pre>
+                  </div>
+                )}
 
                 <button
                   className="run-button"
                   onClick={runQuery}
-                  disabled={isPending || Boolean(validationError)}
+                  disabled={isPending || Boolean(queryError)}
                 >
                   {isPending ? (
                     <LoaderCircle className="spin" size={18} />
@@ -753,6 +771,163 @@ export function PocketPilot() {
         )}
       </section>
     </main>
+  );
+}
+
+function ChainSelector({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (slug: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const selected = getChain(value) ?? getChain("eth")!;
+  const normalizedSearch = search.trim().toLowerCase();
+  const filteredChains = CHAINS.filter((item) => {
+    if (!normalizedSearch) return true;
+    return (
+      item.name.toLowerCase().includes(normalizedSearch) ||
+      item.slug.includes(normalizedSearch) ||
+      item.family.toLowerCase().includes(normalizedSearch)
+    );
+  });
+  const mainnets = filteredChains.filter((item) => !item.testnet);
+  const testnets = filteredChains.filter((item) => item.testnet);
+
+  function choose(slug: string) {
+    onChange(slug);
+    setOpen(false);
+    setSearch("");
+  }
+
+  return (
+    <div className="chain-selector">
+      <button
+        type="button"
+        className="chain-trigger"
+        onClick={() => setOpen((current) => !current)}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+      >
+        <Image
+          src={`/chains/${selected.logo}.png`}
+          alt=""
+          width={22}
+          height={22}
+          className="chain-logo"
+        />
+        <span className="chain-trigger-copy">
+          <strong>{selected.name}</strong>
+          <small>
+            {selected.family}
+            {selected.testnet ? " · Testnet" : ""}
+          </small>
+        </span>
+        <ChevronDown size={16} />
+      </button>
+
+      {open ? (
+        <>
+          <button
+            type="button"
+            className="chain-menu-backdrop"
+            onClick={() => setOpen(false)}
+            aria-label="Close network selector"
+          />
+          <div className="chain-menu">
+            <div className="chain-search">
+              <Search size={15} />
+              <input
+                autoFocus
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder={`Search ${CHAINS.length} Pocket networks`}
+                aria-label="Search Pocket networks"
+              />
+              <span>{filteredChains.length}</span>
+            </div>
+            <div className="chain-options" role="listbox" aria-label="Pocket networks">
+              {mainnets.length ? (
+                <ChainGroup
+                  label="Mainnets"
+                  chains={mainnets}
+                  selectedSlug={selected.slug}
+                  onSelect={choose}
+                />
+              ) : null}
+              {testnets.length ? (
+                <ChainGroup
+                  label="Testnets"
+                  chains={testnets}
+                  selectedSlug={selected.slug}
+                  onSelect={choose}
+                />
+              ) : null}
+              {!filteredChains.length ? (
+                <div className="chain-empty">No Pocket network matches that search.</div>
+              ) : null}
+            </div>
+            <a
+              className="chain-menu-footer"
+              href="https://api.pocket.network/"
+              target="_blank"
+              rel="noreferrer"
+            >
+              View Pocket API portal <ExternalLink size={13} />
+            </a>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function ChainGroup({
+  label,
+  chains,
+  selectedSlug,
+  onSelect,
+}: {
+  label: string;
+  chains: typeof CHAINS;
+  selectedSlug: string;
+  onSelect: (slug: string) => void;
+}) {
+  return (
+    <div className="chain-group">
+      <div className="chain-group-label">
+        <span>{label}</span>
+        <span>{chains.length}</span>
+      </div>
+      {chains.map((item) => (
+        <button
+          type="button"
+          key={item.slug}
+          className={item.slug === selectedSlug ? "chain-option selected" : "chain-option"}
+          onClick={() => onSelect(item.slug)}
+          role="option"
+          aria-selected={item.slug === selectedSlug}
+        >
+          <Image
+            src={`/chains/${item.logo}.png`}
+            alt=""
+            width={26}
+            height={26}
+            className="chain-logo"
+          />
+          <span className="chain-option-copy">
+            <strong>{item.name}</strong>
+            <small>{item.slug}.api.pocket.network</small>
+          </span>
+          <span className={`protocol-badge protocol-${item.family.toLowerCase()}`}>
+            {item.family}
+          </span>
+          {item.slug === selectedSlug ? <Check size={15} /> : null}
+        </button>
+      ))}
+    </div>
   );
 }
 
