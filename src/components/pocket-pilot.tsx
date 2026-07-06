@@ -10,6 +10,7 @@ import {
   Clipboard,
   Code2,
   Copy,
+  Download,
   ExternalLink,
   Gauge,
   GraduationCap,
@@ -537,13 +538,23 @@ export function PocketPilot() {
               <span>Public RPC relay layer</span>
             </div>
           </div>
-          <a
-            href="https://docs.pocket.network/developers/api-reference/"
-            target="_blank"
-            rel="noreferrer"
-          >
-            API reference <ExternalLink size={13} />
-          </a>
+          <div className="sidebar-footer-links">
+            <a
+              href="https://docs.pocket.network/developers/api-reference/"
+              target="_blank"
+              rel="noreferrer"
+            >
+              API reference <ExternalLink size={13} />
+            </a>
+            <a
+              href="https://discord.com/invite/pocket-network"
+              target="_blank"
+              rel="noreferrer"
+              className="discord-link"
+            >
+              <DiscordIcon width="13" height="13" /> Discord community
+            </a>
+          </div>
         </div>
       </aside>
 
@@ -1009,6 +1020,10 @@ export function PocketPilot() {
               chooseRecipe(id);
               setView("playground");
             }}
+            onShare={(text) => {
+              navigator.clipboard.writeText(text);
+              addXpToast(0, "Rank copied to clipboard!");
+            }}
           />
         )}
       </section>
@@ -1263,12 +1278,14 @@ function LearningPath({
   bonuses,
   levelInfo,
   onOpen,
+  onShare,
 }: {
   progress: string[];
   xp: number;
   bonuses: string[];
   levelInfo: ReturnType<typeof getLevelInfo>;
   onOpen: (id: string) => void;
+  onShare: (text: string) => void;
 }) {
   const completePercent = Math.round((progress.length / RECIPES.length) * 100);
   const nextLevel = LEVELS.find((l) => l.level === levelInfo.level + 1);
@@ -1315,6 +1332,28 @@ function LearningPath({
               </span>
             ))}
           </div>
+        </div>
+        <div className="xp-summary-share">
+          <button
+            type="button"
+            className="discord-share-button"
+            onClick={() => {
+              const text = `I am a Level ${levelInfo.level} ${levelInfo.title} in POKTPilot with ${xp} XP! 🚀 Join the learning lab and power your apps with POKT: https://discord.com/invite/pocket-network`;
+              onShare(text);
+              window.open("https://discord.com/invite/pocket-network", "_blank", "noopener,noreferrer");
+            }}
+          >
+            <DiscordIcon width="14" height="14" />
+            <span>Share Rank</span>
+          </button>
+          <button
+            type="button"
+            className="download-card-button"
+            onClick={() => downloadRankCard(xp, levelInfo)}
+          >
+            <Download size={14} />
+            <span>Download Card</span>
+          </button>
         </div>
       </section>
 
@@ -1442,5 +1481,174 @@ function LearningPath({
         </div>
       </section>
     </div>
+  );
+}
+
+// ─── Rank Card Canvas Exporter ───────────────────────────────────────────────
+
+function downloadRankCard(xp: number, levelInfo: ReturnType<typeof getLevelInfo>) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 800;
+  canvas.height = 450;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  // Background Gradient
+  const grad = ctx.createLinearGradient(0, 0, 800, 450);
+  grad.addColorStop(0, "#17181b");
+  grad.addColorStop(1, "#0a0c10");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 800, 450);
+
+  // Subtle grid lines
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.03)";
+  ctx.lineWidth = 1;
+  const gridSize = 25;
+  for (let x = 0; x < 800; x += gridSize) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, 450);
+    ctx.stroke();
+  }
+  for (let y = 0; y < 450; y += gridSize) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(800, y);
+    ctx.stroke();
+  }
+
+  // Draw Hexagon Brand Mark
+  ctx.strokeStyle = "#b8f24a";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  const hexX = 80;
+  const hexY = 70;
+  const size = 20;
+  for (let i = 0; i < 6; i++) {
+    const angle = (Math.PI / 3) * i;
+    const x = hexX + size * Math.cos(angle);
+    const y = hexY + size * Math.sin(angle);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.stroke();
+
+  // POKTPilot Brand Title
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 20px Segoe UI, Arial, sans-serif";
+  ctx.fillText("POKTPilot", 115, 68);
+
+  ctx.fillStyle = "#686b73";
+  ctx.font = "11px Consolas, monospace";
+  ctx.fillText("RPC LEARNING LAB", 115, 83);
+
+  // Decorative border
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(20, 20, 760, 410);
+
+  // Certificate text
+  ctx.fillStyle = "#969aa4";
+  ctx.font = "bold 12px Consolas, monospace";
+  ctx.fillText("POKTPilot SPECIALIST CERTIFICATE", 80, 160);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 38px Segoe UI, Arial, sans-serif";
+  ctx.fillText(levelInfo.title, 80, 210);
+
+  // Draw Level Badge (Glow + Circle)
+  const badgeX = 640;
+  const badgeY = 225;
+  const badgeRadius = 60;
+
+  // Glow
+  const glowGrad = ctx.createRadialGradient(badgeX, badgeY, 10, badgeX, badgeY, badgeRadius + 20);
+  glowGrad.addColorStop(0, `${levelInfo.color}33`);
+  glowGrad.addColorStop(1, "transparent");
+  ctx.fillStyle = glowGrad;
+  ctx.beginPath();
+  ctx.arc(badgeX, badgeY, badgeRadius + 20, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Solid Badge
+  ctx.fillStyle = levelInfo.color;
+  ctx.beginPath();
+  ctx.arc(badgeX, badgeY, badgeRadius, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Inner ring
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(badgeX, badgeY, badgeRadius - 8, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Level Number
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 44px Consolas, monospace";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(String(levelInfo.level), badgeX, badgeY - 5);
+
+  ctx.font = "bold 10px Segoe UI, Arial, sans-serif";
+  ctx.fillText("LEVEL", badgeX, badgeY + 22);
+
+  // Reset text alignment
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+
+  // XP Progress Bar
+  const barX = 80;
+  const barY = 270;
+  const barWidth = 440;
+  const barHeight = 8;
+
+  ctx.fillStyle = "#2a2d34";
+  ctx.beginPath();
+  // Using simple rectangle with rounded rect fallback
+  ctx.rect(barX, barY, barWidth, barHeight);
+  ctx.fill();
+
+  // Fill
+  ctx.fillStyle = levelInfo.color;
+  ctx.beginPath();
+  const fillWidth = (barWidth * levelInfo.progress) / 100;
+  ctx.rect(barX, barY, fillWidth, barHeight);
+  ctx.fill();
+
+  // XP Counters
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 18px Consolas, monospace";
+  ctx.fillText(`${xp.toLocaleString()} XP`, 80, 312);
+
+  ctx.fillStyle = "#686b73";
+  ctx.font = "12px Segoe UI, Arial, sans-serif";
+  ctx.fillText(`Progress: ${levelInfo.progress}% towards next rank`, 200, 310);
+
+  // Footer text
+  ctx.fillStyle = "#969aa4";
+  ctx.font = "12px Segoe UI, Arial, sans-serif";
+  ctx.fillText("Learn the request. Trust the response.", 80, 385);
+
+  ctx.fillStyle = "#b8f24a";
+  ctx.font = "bold 11px Consolas, monospace";
+  ctx.fillText("POWERED BY POKT NETWORK", 80, 403);
+
+  // Trigger download
+  const dataUrl = canvas.toDataURL("image/png");
+  const link = document.createElement("a");
+  link.download = `poktpilot-rank-${levelInfo.title.toLowerCase().replace(/\s/g, "-")}.png`;
+  link.href = dataUrl;
+  link.click();
+}
+
+// ─── Discord Icon Component ──────────────────────────────────────────────────
+
+function DiscordIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 127.14 96.36" fill="currentColor" {...props}>
+      <path d="M107.7,8.07A105.15,105.15,0,0,0,77.26,0a77.19,77.19,0,0,0-3.3,6.83A96.67,96.67,0,0,0,53.22,6.83,77.19,77.19,0,0,0,49.88,0,105.15,105.15,0,0,0,19.44,8.07C3.66,31.58-1.86,54.65,1,77.53A105.73,105.73,0,0,0,32,96.36a77.7,77.7,0,0,0,6.63-10.85,68.43,68.43,0,0,1-10.5-5c.88-.65,1.72-1.34,2.51-2a75.58,75.58,0,0,0,73,0c.79.71,1.63,1.4,2.51,2a68.43,68.43,0,0,1-10.5,5,77.7,77.7,0,0,0,6.63,10.85,105.73,105.73,0,0,0,31-18.83C129.87,50.75,124.23,27.87,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53S36.18,40.36,42.45,40.36,53.83,46,53.83,53,48.72,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.24,60,73.24,53S78.41,40.36,84.69,40.36,96.07,46,96.07,53,91,65.69,84.69,65.69Z" />
+    </svg>
   );
 }

@@ -2583,3 +2583,84 @@ pre {
     min-width: 70px;
   }
 }
+
+/* ─── Discord sharing & Footer links ────────────────────────────────────────── */
+
+.sidebar-footer-links {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.discord-link {
+  color: #5865f2 !important;
+}
+
+.discord-link:hover {
+  color: #4752c4 !important;
+}
+
+.xp-summary-share {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.discord-share-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 38px;
+  padding: 0 16px;
+  border: 1px solid var(--black);
+  border-radius: 5px;
+  color: var(--white);
+  background: #5865F2;
+  font-size: 11px;
+  font-weight: 700;
+  box-shadow: 3px 3px 0 var(--black);
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.discord-share-button:hover {
+  background: #4752c4;
+  transform: translate(1px, 1px);
+  box-shadow: 2px 2px 0 var(--black);
+}
+
+.download-card-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 38px;
+  padding: 0 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  color: var(--ink);
+  background: var(--white);
+  font-size: 11px;
+  font-weight: 700;
+  box-shadow: 3px 3px 0 var(--line-strong);
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.download-card-button:hover {
+  border-color: var(--black);
+  box-shadow: 2px 2px 0 var(--black);
+  transform: translate(1px, 1px);
+}
+
+@media (max-width: 820px) {
+  .xp-summary-share {
+    width: 100%;
+    flex-direction: row;
+    margin-top: 10px;
+  }
+  .xp-summary-share button {
+    flex: 1;
+  }
+}
+
