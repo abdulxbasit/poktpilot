@@ -461,11 +461,11 @@ export function endpointFor(slug: string) {
 }
 
 export function isAddress(value: string) {
-  return /^0x[a-fA-F0-9]{40}$/.test(value);
+  return /^0x[a-fA-F0-9]{40}$/.test(value) || /^[a-z]{2,10}1[a-z0-9]{38}$/.test(value);
 }
 
 export function isTransactionHash(value: string) {
-  return /^0x[a-fA-F0-9]{64}$/.test(value);
+  return /^0x[a-fA-F0-9]{64}$/.test(value) || /^[a-fA-F0-9]{64}$/.test(value);
 }
 
 export function formatHexInteger(value: string) {

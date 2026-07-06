@@ -136,11 +136,82 @@ function readStoredBonuses() {
   }
 }
 
+function stringToHex(str: string): string {
+  let hex = "";
+  for (let i = 0; i < str.length; i++) {
+    hex += str.charCodeAt(i).toString(16).padStart(2, "0");
+  }
+  return hex;
+}
+
+function mapEvmToCosmosRpc(method: AllowedMethod, params: unknown[]): { method: string; params: unknown } {
+  switch (method) {
+    case "eth_blockNumber":
+    case "eth_chainId":
+    case "eth_getTransactionCount":
+      return { method: "status", params: {} };
+    case "eth_gasPrice":
+      return { method: "num_unconfirmed_txs", params: {} };
+    case "eth_getBalance":
+      return {
+        method: "abci_query",
+        params: {
+          path: "/cosmos.bank.v1beta1.Query/AllBalances",
+          data: params[0] ? stringToHex(params[0] as string) : "",
+        }
+      };
+    case "eth_getTransactionByHash":
+      return {
+        method: "tx",
+        params: {
+          hash: params[0] || "",
+          prove: false
+        }
+      };
+    case "eth_getBlockByNumber":
+      const isNumeric = /^\d+$/.test(String(params[0]));
+      return {
+        method: "block",
+        params: isNumeric ? { height: String(params[0]) } : {}
+      };
+    case "eth_getCode":
+      return {
+        method: "abci_info",
+        params: {}
+      };
+    case "eth_getLogs":
+      return {
+        method: "tx_search",
+        params: {
+          query: "tx.height > 0",
+          prove: false
+        }
+      };
+    case "eth_feeHistory":
+      return {
+        method: "blockchain",
+        params: {
+          minHeight: "1",
+          maxHeight: "10"
+        }
+      };
+    default:
+      return { method: "status", params: {} };
+  }
+}
+
 function getDecodedResult(
   method: AllowedMethod,
   result: unknown,
   nativeSymbol: string,
+  isCosmos: boolean = false,
 ) {
+  if (isCosmos) {
+    if (typeof result === "string") return result;
+    if (typeof result === "number") return result.toLocaleString();
+    return result ? JSON.stringify(result, null, 2) : "No result";
+  }
+
   if (typeof result !== "string") {
     if (result === null) return "No matching transaction was found.";
     return result ? JSON.stringify(result, null, 2) : "No result";
@@ -164,13 +235,23 @@ function createCodeSnippet(
   endpoint: string,
   method: AllowedMethod,
   params: unknown[],
+  isCosmos: boolean = false,
 ) {
+  let mappedMethod: string = method;
+  let mappedParams: unknown = params;
+
+  if (isCosmos) {
+    const mapped = mapEvmToCosmosRpc(method, params);
+    mappedMethod = mapped.method;
+    mappedParams = mapped.params;
+  }
+
   const rpcBody = JSON.stringify(
-    { jsonrpc: "2.0", method, params, id: 1 },
+    { jsonrpc: "2.0", method: mappedMethod, params: mappedParams, id: 1 },
     null,
     2,
   );
-  const inlineBody = JSON.stringify({ jsonrpc: "2.0", method, params, id: 1 });
+  const inlineBody = JSON.stringify({ jsonrpc: "2.0", method: mappedMethod, params: mappedParams, id: 1 });
 
   if (language === "curl") {
     return `curl -X POST ${endpoint} \\\n  -H "Content-Type: application/json" \\\n  -d '${inlineBody}'`;
@@ -179,6 +260,9 @@ function createCodeSnippet(
     return `import requests\n\nendpoint = "${endpoint}"\npayload = ${rpcBody.replaceAll("null", "None")}\n\nresponse = requests.post(endpoint, json=payload, timeout=12)\nprint(response.json())`;
   }
   if (language === "viem") {
+    if (isCosmos) {
+      return `// Viem is an EVM library. For Cosmos, use CosmJS or standard fetch/axios:\n\nconst response = await fetch("${endpoint}", {\n  method: "POST",\n  headers: { "Content-Type": "application/json" },\n  body: JSON.stringify(${rpcBody}),\n});\nconst result = await response.json();\nconsole.log(result);`;
+    }
     return `import { createPublicClient, http } from "viem";\n\nconst client = createPublicClient({\n  transport: http("${endpoint}"),\n});\n\nconst result = await client.request({\n  method: "${method}",\n  params: ${JSON.stringify(params)},\n});\n\nconsole.log(result);`;
   }
   return `const response = await fetch("${endpoint}", {\n  method: "POST",\n  headers: { "Content-Type": "application/json" },\n  body: JSON.stringify(${rpcBody}),\n});\n\nconst data = await response.json();\nconsole.log(data);`;
@@ -253,21 +337,23 @@ export function PocketPilot() {
       !isAddress(recipe.defaultParams[0] as string)
     ) {
       return parameter
-        ? "Enter a 42-character EVM address."
+        ? chain.family === "Cosmos"
+          ? "Enter a valid Cosmos address (e.g. cosmos1...)."
+          : "Enter a 42-character EVM address."
         : null;
     }
     if (recipe.id === "transaction" && !isTransactionHash(parameter)) {
       return parameter
-        ? "Enter a 66-character transaction hash."
+        ? "Enter a valid transaction hash."
         : "A transaction hash is required.";
     }
     return null;
-  }, [parameter, recipe]);
+  }, [parameter, recipe, chain]);
 
   const compatibilityError =
-    chain.family === "EVM"
+    chain.family === "EVM" || chain.family === "Cosmos"
       ? null
-      : `${chain.name} is available through Pocket's ${chain.family} endpoint. The current lessons teach EVM JSON-RPC, so choose an EVM network to run this recipe.`;
+      : `${chain.name} is available through Pocket's ${chain.family} endpoint. The current lessons teach EVM or Cosmos JSON-RPC, so choose a supported network to run this recipe.`;
   const queryError = compatibilityError ?? validationError;
 
   const code = compatibilityError
@@ -277,6 +363,7 @@ export function PocketPilot() {
       endpointFor(chain.slug),
       recipe.method,
       params,
+      chain.family === "Cosmos",
     );
 
   const levelInfo = getLevelInfo(xp);
@@ -452,7 +539,7 @@ export function PocketPilot() {
   const result = payload?.response?.result;
   const decoded =
     result !== undefined
-      ? getDecodedResult(recipe.method, result, chain.nativeSymbol)
+      ? getDecodedResult(recipe.method, result, chain.nativeSymbol, chain.family === "Cosmos")
       : null;
 
   const showQuiz =
@@ -910,17 +997,23 @@ export function PocketPilot() {
                 ) : (
                   <div className="request-preview">
                     <div className="code-header">
-                      <span>JSON-RPC 2.0 request</span>
+                      <span>{chain.family === "Cosmos" ? "Tendermint JSON-RPC request" : "JSON-RPC 2.0 request"}</span>
                       <span>POST</span>
                     </div>
                     <pre>
                       {JSON.stringify(
-                        {
-                          jsonrpc: "2.0",
-                          method: recipe.method,
-                          params,
-                          id: 1,
-                        },
+                        chain.family === "Cosmos"
+                          ? {
+                              jsonrpc: "2.0",
+                              ...mapEvmToCosmosRpc(recipe.method, params),
+                              id: 1,
+                            }
+                          : {
+                              jsonrpc: "2.0",
+                              method: recipe.method,
+                              params,
+                              id: 1,
+                            },
                         null,
                         2,
                       )}
