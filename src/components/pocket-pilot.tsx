@@ -27,6 +27,9 @@ import {
   Server,
   Sparkles,
   Star,
+  Globe,
+  BookMarked,
+  ChevronRight,
   TerminalSquare,
   Trophy,
   X,
@@ -86,6 +89,21 @@ type ViewMode = "playground" | "lessons";
 type CodeLanguage = "curl" | "javascript" | "python" | "viem";
 
 type XpToast = { id: number; amount: number; label?: string };
+
+type AiExplanation = {
+  whatThisDoes: string;
+  howPoktPowersThis: string;
+  suggestedRecipeNote: string;
+  technicalDetails: string[];
+};
+
+type AiResponseData = {
+  explanation: AiExplanation;
+  recipeId: string;
+  chainSlug: string;
+  parameter?: string;
+  source: "ai" | "local" | "local-fallback";
+};
 
 const STORAGE_KEY = "pocketpilot-progress-v1";
 const XP_STORAGE_KEY = "pocketpilot-xp-v1";
@@ -196,6 +214,11 @@ export function PocketPilot() {
   const [levelUpMsg, setLevelUpMsg] = useState<string | null>(null);
   const toastIdRef = useRef(0);
 
+  // AI response state
+  const [aiResponse, setAiResponse] = useState<AiResponseData | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
   // Quiz state
   const [quizAnswer, setQuizAnswer] = useState<number | null>(null);
   const [quizBonusGranted, setQuizBonusGranted] = useState(false);
@@ -215,8 +238,8 @@ export function PocketPilot() {
       return recipe.id === "wallet-balance"
         ? [parameter || recipe.defaultParams[0], "latest"]
         : recipe.id === "nonce-lookup"
-        ? [parameter || recipe.defaultParams[0], "latest"]
-        : [parameter || recipe.defaultParams[0], "latest"];
+          ? [parameter || recipe.defaultParams[0], "latest"]
+          : [parameter || recipe.defaultParams[0], "latest"];
     }
     if (recipe.id === "pending-nonce") return [parameter || recipe.defaultParams[0], "pending"];
     if (recipe.id === "transaction") return [parameter];
@@ -324,12 +347,42 @@ export function PocketPilot() {
     if (window.innerWidth < 900) setSidebarOpen(false);
   }
 
-  function planFromPrompt() {
-    const planned = parseNaturalLanguage(prompt);
-    setChainSlug(planned.chain.slug);
-    chooseRecipe(planned.recipe.id);
-    if (planned.parameter) setParameter(planned.parameter);
+  async function planFromPrompt() {
+    if (!prompt.trim()) return;
+    setAiResponse(null);
+    setAiError(null);
+    setAiLoading(true);
     setView("playground");
+
+    try {
+      const response = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: prompt }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`AI returned ${response.status}`);
+      }
+
+      const data = (await response.json()) as AiResponseData;
+      setAiResponse(data);
+
+      // Auto-select the recipe and chain suggested by AI
+      setChainSlug(data.chainSlug);
+      chooseRecipe(data.recipeId);
+      if (data.parameter) setParameter(data.parameter);
+    } catch (err) {
+      console.error("AI query failed, falling back:", err);
+      // Fallback to local parsing
+      const planned = parseNaturalLanguage(prompt);
+      setChainSlug(planned.chain.slug);
+      chooseRecipe(planned.recipe.id);
+      if (planned.parameter) setParameter(planned.parameter);
+      setAiError("AI couldn't respond — using smart keyword matching instead.");
+    } finally {
+      setAiLoading(false);
+    }
   }
 
   async function runQuery() {
@@ -602,6 +655,115 @@ export function PocketPilot() {
                 </div>
               </label>
             </section>
+
+            {/* ─── AI Response Panel ─────────────────────────────────── */}
+            {aiLoading && (
+              <section className="ai-response-panel ai-loading-state">
+                <div className="ai-panel-header">
+                  <div className="ai-panel-icon">
+                    <Sparkles size={18} className="ai-spin" />
+                  </div>
+                  <div>
+                    <strong>PocketPilot AI is thinking…</strong>
+                    <p>Analyzing your query and finding the best recipe</p>
+                  </div>
+                </div>
+                <div className="ai-skeleton">
+                  <div className="ai-skeleton-line wide" />
+                  <div className="ai-skeleton-line" />
+                  <div className="ai-skeleton-line narrow" />
+                </div>
+              </section>
+            )}
+
+            {aiError && !aiResponse && (
+              <section className="ai-response-panel ai-error-state">
+                <div className="ai-panel-header">
+                  <div className="ai-panel-icon fallback">
+                    <Sparkles size={18} />
+                  </div>
+                  <div>
+                    <strong>Smart match applied</strong>
+                    <p>{aiError}</p>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {aiResponse && !aiLoading && (
+              <section className="ai-response-panel ai-visible">
+                <button
+                  className="ai-panel-close"
+                  onClick={() => setAiResponse(null)}
+                  aria-label="Close AI response"
+                  title="Dismiss"
+                >
+                  <X size={14} />
+                </button>
+
+                <div className="ai-layout-grid">
+                  {/* Left Column: Core Concept & Specifications */}
+                  <div className="ai-layout-left">
+                    <div className="ai-header-inline">
+                      <Sparkles size={14} className="ai-accent-icon" />
+                      <span>Tutor insights</span>
+                      <span className="ai-source-badge">
+                        {aiResponse.source === "ai" ? "Gemini" : "Smart Match"}
+                      </span>
+                    </div>
+
+                    <h2 className="ai-concept-title">Core concept</h2>
+                    <p className="ai-text-desc">
+                      {aiResponse.explanation.whatThisDoes}
+                    </p>
+
+                    <h3 className="ai-subtitle-specs">Technical specifications</h3>
+                    <ul className="ai-specs-list">
+                      {aiResponse.explanation.technicalDetails.map((detail, index) => (
+                        <li key={index}>
+                          <span className="ai-bullet" />
+                          <span>{detail}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Right Column: Infrastructure & Practice pathway */}
+                  <div className="ai-layout-right">
+                    <div className="ai-card-right">
+                      <div className="ai-header-inline">
+                        <Globe size={13} className="ai-accent-icon-green" />
+                        <span>POKT Infrastructure</span>
+                      </div>
+                      <p className="ai-text-desc-small">
+                        {aiResponse.explanation.howPoktPowersThis}
+                      </p>
+                    </div>
+
+                    <div className="ai-card-right highlight">
+                      <div className="ai-header-inline">
+                        <BookMarked size={13} className="ai-accent-icon-amber" />
+                        <span>Practice pathway</span>
+                      </div>
+                      <p className="ai-text-desc-small">
+                        {aiResponse.explanation.suggestedRecipeNote}
+                      </p>
+                      <button
+                        className="ai-action-btn"
+                        onClick={() => {
+                          setAiResponse(null);
+                          const target = document.querySelector(".composer-panel");
+                          target?.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }}
+                      >
+                        Start lesson
+                        <ChevronRight size={13} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            )}
 
             {/* Recipe info banner with XP reward */}
             <div className="recipe-meta-banner">
