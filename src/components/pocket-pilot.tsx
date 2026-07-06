@@ -25,7 +25,9 @@ import {
   Search,
   Server,
   Sparkles,
+  Star,
   TerminalSquare,
+  Trophy,
   X,
   Zap,
 } from "lucide-react";
@@ -34,11 +36,15 @@ import {
   type CSSProperties,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useTransition,
 } from "react";
 import {
+  CATEGORY_ORDER,
+  CATEGORY_XP_BONUS,
   CHAINS,
+  LEVELS,
   RECIPES,
   endpointFor,
   explainMethod,
@@ -46,11 +52,13 @@ import {
   formatHexInteger,
   formatWei,
   getChain,
+  getLevelInfo,
   getRecipe,
   isAddress,
   isTransactionHash,
   parseNaturalLanguage,
   type AllowedMethod,
+  type RecipeCategory,
 } from "@/lib/pocket";
 
 type RpcPayload = {
@@ -76,11 +84,33 @@ type RpcPayload = {
 type ViewMode = "playground" | "lessons";
 type CodeLanguage = "curl" | "javascript" | "python" | "viem";
 
+type XpToast = { id: number; amount: number; label?: string };
+
 const STORAGE_KEY = "pocketpilot-progress-v1";
+const XP_STORAGE_KEY = "pocketpilot-xp-v1";
+const BONUS_STORAGE_KEY = "pocketpilot-bonuses-v1";
 
 function readStoredProgress() {
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY);
+    return stored ? (JSON.parse(stored) as string[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function readStoredXp() {
+  try {
+    const stored = window.localStorage.getItem(XP_STORAGE_KEY);
+    return stored ? (JSON.parse(stored) as number) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function readStoredBonuses() {
+  try {
+    const stored = window.localStorage.getItem(BONUS_STORAGE_KEY);
     return stored ? (JSON.parse(stored) as string[]) : [];
   } catch {
     return [];
@@ -102,6 +132,11 @@ function getDecodedResult(
   }
   if (method === "eth_getBalance") return formatWei(result, nativeSymbol);
   if (method === "eth_gasPrice") return formatGwei(result);
+  if (method === "eth_getTransactionCount") return formatHexInteger(result);
+  if (method === "eth_getCode") {
+    if (result === "0x") return "0x — This is an EOA (wallet), not a contract.";
+    return `${result.length} bytes of bytecode — This is a smart contract.`;
+  }
   return result;
 }
 
@@ -130,6 +165,14 @@ function createCodeSnippet(
   return `const response = await fetch("${endpoint}", {\n  method: "POST",\n  headers: { "Content-Type": "application/json" },\n  body: JSON.stringify(${rpcBody}),\n});\n\nconst data = await response.json();\nconsole.log(data);`;
 }
 
+function getCategoryRecipes(category: RecipeCategory) {
+  return RECIPES.filter((r) => r.category === category);
+}
+
+function isCategoryComplete(category: RecipeCategory, progress: string[]) {
+  return getCategoryRecipes(category).every((r) => progress.includes(r.id));
+}
+
 export function PocketPilot() {
   const [view, setView] = useState<ViewMode>("playground");
   const [chainSlug, setChainSlug] = useState("eth");
@@ -144,25 +187,50 @@ export function PocketPilot() {
   const [copied, setCopied] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [progress, setProgress] = useState<string[]>([]);
+  const [xp, setXp] = useState(0);
+  const [bonuses, setBonuses] = useState<string[]>([]);
   const [progressReady, setProgressReady] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [xpToasts, setXpToasts] = useState<XpToast[]>([]);
+  const [levelUpMsg, setLevelUpMsg] = useState<string | null>(null);
+  const toastIdRef = useRef(0);
+
+  // Quiz state
+  const [quizAnswer, setQuizAnswer] = useState<number | null>(null);
+  const [quizBonusGranted, setQuizBonusGranted] = useState(false);
+  const [prevRecipeId, setPrevRecipeId] = useState("latest-block");
+
+  if (recipeId !== prevRecipeId) {
+    setPrevRecipeId(recipeId);
+    setQuizAnswer(null);
+    setQuizBonusGranted(false);
+  }
 
   const chain = getChain(chainSlug) ?? CHAINS[0];
   const recipe = getRecipe(recipeId) ?? RECIPES[0];
 
   const params = useMemo(() => {
-    if (recipe.id === "wallet-balance") {
-      return [parameter, "latest"];
+    if (recipe.id === "wallet-balance" || recipe.id === "nonce-lookup" || recipe.id === "contract-code") {
+      return recipe.id === "wallet-balance"
+        ? [parameter || recipe.defaultParams[0], "latest"]
+        : recipe.id === "nonce-lookup"
+        ? [parameter || recipe.defaultParams[0], "latest"]
+        : [parameter || recipe.defaultParams[0], "latest"];
     }
+    if (recipe.id === "pending-nonce") return [parameter || recipe.defaultParams[0], "pending"];
     if (recipe.id === "transaction") return [parameter];
     return recipe.defaultParams;
   }, [parameter, recipe]);
 
   const validationError = useMemo(() => {
-    if (recipe.id === "wallet-balance" && !isAddress(parameter)) {
+    if (
+      (recipe.id === "wallet-balance" || recipe.id === "nonce-lookup" || recipe.id === "contract-code" || recipe.id === "pending-nonce") &&
+      !isAddress(parameter) &&
+      !isAddress(recipe.defaultParams[0] as string)
+    ) {
       return parameter
         ? "Enter a 42-character EVM address."
-        : "A wallet address is required.";
+        : null;
     }
     if (recipe.id === "transaction" && !isTransactionHash(parameter)) {
       return parameter
@@ -170,7 +238,8 @@ export function PocketPilot() {
         : "A transaction hash is required.";
     }
     return null;
-  }, [parameter, recipe.id]);
+  }, [parameter, recipe]);
+
   const compatibilityError =
     chain.family === "EVM"
       ? null
@@ -180,18 +249,21 @@ export function PocketPilot() {
   const code = compatibilityError
     ? `// ${chain.name} is available through Pocket.\n// ${chain.family}-specific learning recipes are coming next.\n\nconst endpoint = "${endpointFor(chain.slug)}";`
     : createCodeSnippet(
-        language,
-        endpointFor(chain.slug),
-        recipe.method,
-        params,
-      );
+      language,
+      endpointFor(chain.slug),
+      recipe.method,
+      params,
+    );
+
+  const levelInfo = getLevelInfo(xp);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
       setProgress(readStoredProgress());
+      setXp(readStoredXp());
+      setBonuses(readStoredBonuses());
       setProgressReady(true);
     }, 0);
-
     return () => window.clearTimeout(timeout);
   }, []);
 
@@ -200,6 +272,41 @@ export function PocketPilot() {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
     }
   }, [progress, progressReady]);
+
+  useEffect(() => {
+    if (progressReady) {
+      window.localStorage.setItem(XP_STORAGE_KEY, JSON.stringify(xp));
+    }
+  }, [xp, progressReady]);
+
+  useEffect(() => {
+    if (progressReady) {
+      window.localStorage.setItem(BONUS_STORAGE_KEY, JSON.stringify(bonuses));
+    }
+  }, [bonuses, progressReady]);
+
+
+  function addXpToast(amount: number, label?: string) {
+    const id = ++toastIdRef.current;
+    setXpToasts((prev) => [...prev, { id, amount, label }]);
+    window.setTimeout(() => {
+      setXpToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 2200);
+  }
+
+  function awardXp(amount: number, label?: string) {
+    setXp((prev) => {
+      const oldLevel = getLevelInfo(prev);
+      const newXp = prev + amount;
+      const newLevel = getLevelInfo(newXp);
+      if (newLevel.level > oldLevel.level) {
+        setLevelUpMsg(`Level up! You're now a ${newLevel.title}!`);
+        window.setTimeout(() => setLevelUpMsg(null), 3500);
+      }
+      return newXp;
+    });
+    addXpToast(amount, label);
+  }
 
   function chooseRecipe(id: string) {
     const nextRecipe = getRecipe(id);
@@ -242,9 +349,26 @@ export function PocketPilot() {
         setPayload(nextPayload);
         setHistory((current) => [nextPayload, ...current].slice(0, 5));
         if (!nextPayload.error && !nextPayload.response?.error) {
-          setProgress((current) =>
-            current.includes(recipe.id) ? current : [...current, recipe.id],
-          );
+          const isNew = !progress.includes(recipe.id);
+          if (isNew) {
+            setProgress((current) =>
+              current.includes(recipe.id) ? current : [...current, recipe.id],
+            );
+            awardXp(recipe.xpReward, recipe.title);
+            // Check for category completion bonus
+            const catRecipes = getCategoryRecipes(recipe.category);
+            const willComplete = catRecipes
+              .filter((r) => r.id !== recipe.id)
+              .every((r) => progress.includes(r.id));
+            const bonusKey = `cat-${recipe.category}`;
+            if (willComplete && !bonuses.includes(bonusKey)) {
+              window.setTimeout(() => {
+                const bonus = CATEGORY_XP_BONUS[recipe.category];
+                awardXp(bonus, `${recipe.category} Complete!`);
+                setBonuses((prev) => [...prev, bonusKey]);
+              }, 800);
+            }
+          }
         }
       } catch {
         setPayload({
@@ -253,6 +377,15 @@ export function PocketPilot() {
         });
       }
     });
+  }
+
+  function handleQuizAnswer(index: number) {
+    if (quizAnswer !== null) return;
+    setQuizAnswer(index);
+    if (index === recipe.quizAnswerIndex && !quizBonusGranted) {
+      setQuizBonusGranted(true);
+      window.setTimeout(() => awardXp(20, "Quiz Bonus!"), 400);
+    }
   }
 
   async function copyCode() {
@@ -268,8 +401,34 @@ export function PocketPilot() {
       ? getDecodedResult(recipe.method, result, chain.nativeSymbol)
       : null;
 
+  const showQuiz =
+    payload &&
+    !isPending &&
+    !responseError &&
+    recipe.quizQuestion &&
+    recipe.quizOptions;
+
   return (
     <main className="app-shell">
+      {/* Level-up notification */}
+      {levelUpMsg && (
+        <div className="level-up-banner" aria-live="polite">
+          <Trophy size={18} />
+          {levelUpMsg}
+        </div>
+      )}
+
+      {/* XP Toasts */}
+      <div className="xp-toast-container" aria-live="polite" aria-atomic="false">
+        {xpToasts.map((toast) => (
+          <div key={toast.id} className="xp-toast">
+            <Zap size={14} />
+            <span>+{toast.amount} XP</span>
+            {toast.label && <small>{toast.label}</small>}
+          </div>
+        ))}
+      </div>
+
       <header className="mobile-header">
         <button
           className="icon-button"
@@ -280,7 +439,9 @@ export function PocketPilot() {
           <Menu size={19} />
         </button>
         <Brand compact />
-        <StatusPill />
+        <div className="mobile-xp-hud">
+          <XpHud xp={xp} levelInfo={levelInfo} compact />
+        </div>
       </header>
 
       {sidebarOpen ? (
@@ -323,7 +484,7 @@ export function PocketPilot() {
             }}
           >
             <GraduationCap size={17} />
-            Learning path
+            Learning paths
             <span className="nav-count">
               {progress.length}/{RECIPES.length}
             </span>
@@ -336,25 +497,34 @@ export function PocketPilot() {
             <span>{RECIPES.length}</span>
           </div>
           <div className="recipe-nav">
-            {RECIPES.map((item, index) => (
-              <button
-                key={item.id}
-                className={
-                  recipe.id === item.id ? "recipe-link active" : "recipe-link"
-                }
-                onClick={() => {
-                  chooseRecipe(item.id);
-                  setView("playground");
-                }}
-              >
-                <span className="recipe-number">
-                  {progress.includes(item.id) ? <Check size={12} /> : index + 1}
-                </span>
-                <span>
-                  <strong>{item.title}</strong>
-                  <small>{item.skill}</small>
-                </span>
-              </button>
+            {CATEGORY_ORDER.map((cat) => (
+              <div key={cat} className="recipe-nav-group">
+                <div className="recipe-nav-category">{cat}</div>
+                {RECIPES.filter((r) => r.category === cat).map((item) => {
+                  const globalIndex = RECIPES.indexOf(item);
+                  return (
+                    <button
+                      key={item.id}
+                      className={
+                        recipe.id === item.id ? "recipe-link active" : "recipe-link"
+                      }
+                      onClick={() => {
+                        chooseRecipe(item.id);
+                        setView("playground");
+                      }}
+                    >
+                      <span className="recipe-number">
+                        {progress.includes(item.id) ? <Check size={12} /> : globalIndex + 1}
+                      </span>
+                      <span>
+                        <strong>{item.title}</strong>
+                        <small>{item.skill}</small>
+                      </span>
+                      <span className="recipe-xp-pill">+{item.xpReward}</span>
+                    </button>
+                  );
+                })}
+              </div>
             ))}
           </div>
         </div>
@@ -363,7 +533,7 @@ export function PocketPilot() {
           <div className="pocket-route">
             <Radio size={16} />
             <div>
-              <strong>Powered by Pocket</strong>
+              <strong>Powered by POKT</strong>
               <span>Public RPC relay layer</span>
             </div>
           </div>
@@ -390,7 +560,7 @@ export function PocketPilot() {
             </h1>
           </div>
           <div className="desktop-status">
-            <StatusPill />
+            <XpHud xp={xp} levelInfo={levelInfo} />
           </div>
         </div>
 
@@ -421,6 +591,25 @@ export function PocketPilot() {
                 </div>
               </label>
             </section>
+
+            {/* Recipe info banner with XP reward */}
+            <div className="recipe-meta-banner">
+              <div className="recipe-meta-left">
+                <span className={`category-badge cat-${recipe.category.toLowerCase().replace(/\s/g, "-")}`}>
+                  {recipe.category}
+                </span>
+                <DifficultyStars difficulty={recipe.difficulty} />
+              </div>
+              <div className="recipe-xp-reward">
+                <Zap size={14} />
+                <span>+{recipe.xpReward} XP on completion</span>
+                {progress.includes(recipe.id) && (
+                  <span className="already-earned">
+                    <Check size={12} /> Earned
+                  </span>
+                )}
+              </div>
+            </div>
 
             <div className="work-grid">
               <section
@@ -466,10 +655,14 @@ export function PocketPilot() {
                         value={recipeId}
                         onChange={(event) => chooseRecipe(event.target.value)}
                       >
-                        {RECIPES.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.title}
-                          </option>
+                        {CATEGORY_ORDER.map((cat) => (
+                          <optgroup key={cat} label={cat}>
+                            {RECIPES.filter((r) => r.category === cat).map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.title} (+{item.xpReward} XP)
+                              </option>
+                            ))}
+                          </optgroup>
                         ))}
                       </select>
                       <ChevronDown size={16} />
@@ -481,9 +674,8 @@ export function PocketPilot() {
                   <label className="field parameter-field">
                     <span>{recipe.paramLabel}</span>
                     <div
-                      className={`input-wrap ${
-                        validationError && parameter ? "invalid" : ""
-                      }`}
+                      className={`input-wrap ${validationError && parameter ? "invalid" : ""
+                        }`}
                     >
                       <Search size={15} />
                       <input
@@ -574,6 +766,9 @@ export function PocketPilot() {
                     <Play size={17} fill="currentColor" />
                   )}
                   {isPending ? "Relaying through Pocket…" : "Run RPC request"}
+                  <span className="run-xp-hint">
+                    {progress.includes(recipe.id) ? "Already earned" : `+${recipe.xpReward} XP`}
+                  </span>
                   <span>Ctrl/⌘ Enter</span>
                 </button>
               </section>
@@ -662,6 +857,50 @@ export function PocketPilot() {
                         <p>{explainMethod(recipe.method)}</p>
                       </div>
                     </div>
+
+                    {/* Quiz panel */}
+                    {showQuiz && (
+                      <div className="quiz-panel">
+                        <div className="quiz-header">
+                          <Trophy size={16} />
+                          <span>Quick quiz — earn +20 bonus XP</span>
+                        </div>
+                        <p className="quiz-question">{recipe.quizQuestion}</p>
+                        <div className="quiz-options">
+                          {recipe.quizOptions!.map((opt, i) => {
+                            let cls = "quiz-option";
+                            if (quizAnswer !== null) {
+                              if (i === recipe.quizAnswerIndex) cls += " correct";
+                              else if (i === quizAnswer) cls += " wrong";
+                              else cls += " dimmed";
+                            }
+                            return (
+                              <button
+                                key={i}
+                                className={cls}
+                                onClick={() => handleQuizAnswer(i)}
+                                disabled={quizAnswer !== null}
+                              >
+                                <span className="quiz-option-letter">
+                                  {String.fromCharCode(65 + i)}
+                                </span>
+                                {opt}
+                                {quizAnswer !== null && i === recipe.quizAnswerIndex && (
+                                  <Check size={14} className="quiz-check" />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {quizAnswer !== null && (
+                          <div className={`quiz-result ${quizAnswer === recipe.quizAnswerIndex ? "success" : "try-again"}`}>
+                            {quizAnswer === recipe.quizAnswerIndex
+                              ? "🎉 Correct! +20 XP bonus awarded."
+                              : `Not quite — the correct answer is "${recipe.quizOptions![recipe.quizAnswerIndex!]}".`}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     <details className="raw-response" open>
                       <summary>
@@ -763,6 +1002,9 @@ export function PocketPilot() {
         ) : (
           <LearningPath
             progress={progress}
+            xp={xp}
+            bonuses={bonuses}
+            levelInfo={levelInfo}
             onOpen={(id) => {
               chooseRecipe(id);
               setView("playground");
@@ -773,6 +1015,70 @@ export function PocketPilot() {
     </main>
   );
 }
+
+// ─── XP HUD Component ─────────────────────────────────────────────────────────
+
+function XpHud({
+  xp,
+  levelInfo,
+  compact = false,
+}: {
+  xp: number;
+  levelInfo: ReturnType<typeof getLevelInfo>;
+  compact?: boolean;
+}) {
+  const nextLevel = LEVELS.find((l) => l.level === levelInfo.level + 1);
+
+  return (
+    <div className={`xp-hud ${compact ? "xp-hud-compact" : ""}`}>
+      <div
+        className="xp-level-badge"
+        style={{ "--level-color": levelInfo.color } as CSSProperties}
+        title={levelInfo.title}
+      >
+        <span>{levelInfo.level}</span>
+      </div>
+      <div className="xp-hud-info">
+        {!compact && <span className="xp-level-title">{levelInfo.title}</span>}
+        <div className="xp-bar-wrap">
+          <div
+            className="xp-bar-fill"
+            style={{
+              "--xp-progress": `${levelInfo.progress}%`,
+              "--level-color": levelInfo.color,
+            } as CSSProperties}
+          />
+        </div>
+        <span className="xp-count">
+          <Zap size={11} />
+          {xp.toLocaleString()} XP
+          {nextLevel && !compact && (
+            <small> / {nextLevel.minXp.toLocaleString()}</small>
+          )}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Difficulty Stars ─────────────────────────────────────────────────────────
+
+function DifficultyStars({ difficulty }: { difficulty: 1 | 2 | 3 }) {
+  return (
+    <div className="difficulty-stars" title={`Difficulty: ${difficulty}/3`}>
+      {[1, 2, 3].map((i) => (
+        <Star
+          key={i}
+          size={12}
+          className={i <= difficulty ? "star-filled" : "star-empty"}
+          fill={i <= difficulty ? "currentColor" : "none"}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ─── Chain Selector ────────────────────────────────────────────────────────────
 
 function ChainSelector({
   value,
@@ -931,6 +1237,8 @@ function ChainGroup({
   );
 }
 
+// ─── Brand ────────────────────────────────────────────────────────────────────
+
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <div className={`brand ${compact ? "brand-compact" : ""}`}>
@@ -939,36 +1247,81 @@ function Brand({ compact = false }: { compact?: boolean }) {
         <span />
       </div>
       <div>
-        <strong>PocketPilot</strong>
+        <strong>POKTPilot</strong>
         {!compact ? <small>RPC learning lab</small> : null}
       </div>
     </div>
   );
 }
 
-function StatusPill() {
-  return (
-    <div className="status-pill">
-      <span />
-      Pocket gateway
-    </div>
-  );
-}
+
+// ─── Learning Path ────────────────────────────────────────────────────────────
 
 function LearningPath({
   progress,
+  xp,
+  bonuses,
+  levelInfo,
   onOpen,
 }: {
   progress: string[];
+  xp: number;
+  bonuses: string[];
+  levelInfo: ReturnType<typeof getLevelInfo>;
   onOpen: (id: string) => void;
 }) {
   const completePercent = Math.round((progress.length / RECIPES.length) * 100);
+  const nextLevel = LEVELS.find((l) => l.level === levelInfo.level + 1);
 
   return (
     <div className="learning-layout">
+      {/* XP Progress Summary */}
+      <section className="xp-progress-summary">
+        <div className="xp-summary-left">
+          <div
+            className="xp-level-badge-large"
+            style={{ "--level-color": levelInfo.color } as CSSProperties}
+          >
+            <span>{levelInfo.level}</span>
+          </div>
+          <div>
+            <span className="panel-kicker">Your rank</span>
+            <strong className="xp-summary-title">{levelInfo.title}</strong>
+            <p className="xp-summary-sub">
+              {xp.toLocaleString()} XP total
+              {nextLevel && ` · ${(nextLevel.minXp - xp).toLocaleString()} to next level`}
+            </p>
+          </div>
+        </div>
+        <div className="xp-summary-right">
+          <div className="xp-summary-bar-wrap">
+            <div
+              className="xp-summary-bar"
+              style={{
+                "--xp-progress": `${levelInfo.progress}%`,
+                "--level-color": levelInfo.color,
+              } as CSSProperties}
+            />
+          </div>
+          <div className="xp-level-labels">
+            {LEVELS.map((l) => (
+              <span
+                key={l.level}
+                className={l.level <= levelInfo.level ? "reached" : ""}
+                style={{ "--level-color": l.color } as CSSProperties}
+                title={l.title}
+              >
+                {l.level}
+              </span>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Progress band */}
       <section className="progress-band">
         <div>
-          <span className="panel-kicker">Your progress</span>
+          <span className="panel-kicker">Overall progress</span>
           <strong>{completePercent}%</strong>
           <p>
             {progress.length} of {RECIPES.length} live RPC skills completed
@@ -982,33 +1335,85 @@ function LearningPath({
         </div>
       </section>
 
-      <section className="lesson-list">
-        {RECIPES.map((recipe, index) => {
-          const complete = progress.includes(recipe.id);
-          return (
-            <article className="lesson-row" key={recipe.id}>
-              <div className={`lesson-step ${complete ? "complete" : ""}`}>
-                {complete ? <Check size={16} /> : index + 1}
+      {/* Lessons grouped by category */}
+      {CATEGORY_ORDER.map((cat) => {
+        const catRecipes = getCategoryRecipes(cat);
+        const catComplete = isCategoryComplete(cat, progress);
+        const bonusKey = `cat-${cat}`;
+        const bonusEarned = bonuses.includes(bonusKey);
+        const catDone = catRecipes.filter((r) => progress.includes(r.id)).length;
+
+        return (
+          <section key={cat} className="lesson-category-section">
+            <div className="lesson-category-header">
+              <div className="lesson-category-info">
+                <span className={`category-badge cat-${cat.toLowerCase().replace(/\s/g, "-")}`}>
+                  {cat}
+                </span>
+                <span className="category-progress-text">
+                  {catDone}/{catRecipes.length} complete
+                </span>
+                {catComplete && (
+                  <span className="category-complete-badge">
+                    <Trophy size={13} /> Complete
+                  </span>
+                )}
               </div>
-              <div className="lesson-copy">
-                <div>
-                  <span>{recipe.skill}</span>
-                  <h2>{recipe.title}</h2>
-                </div>
-                <p>{recipe.description}</p>
+              <div className="category-bonus-pill">
+                <Zap size={12} />
+                {bonusEarned ? (
+                  <span className="bonus-earned">+{CATEGORY_XP_BONUS[cat]} XP bonus earned!</span>
+                ) : (
+                  <span>+{CATEGORY_XP_BONUS[cat]} XP bonus for finishing</span>
+                )}
               </div>
-              <div className="lesson-method">{recipe.method}</div>
-              <button
-                className="secondary-button"
-                onClick={() => onOpen(recipe.id)}
-              >
-                {complete ? "Practice again" : "Start lesson"}
-                <ArrowRight size={15} />
-              </button>
-            </article>
-          );
-        })}
-      </section>
+            </div>
+
+            <div className="lesson-list">
+              {catRecipes.map((recipe) => {
+                const complete = progress.includes(recipe.id);
+                const globalIndex = RECIPES.indexOf(recipe);
+                return (
+                  <article className="lesson-row" key={recipe.id}>
+                    <div className={`lesson-step ${complete ? "complete" : ""}`}>
+                      {complete ? <Check size={16} /> : globalIndex + 1}
+                    </div>
+                    <div className="lesson-copy">
+                      <div>
+                        <span>{recipe.skill}</span>
+                        <h2>{recipe.title}</h2>
+                      </div>
+                      <p>{recipe.description}</p>
+                      <div className="lesson-meta">
+                        <DifficultyStars difficulty={recipe.difficulty} />
+                        {recipe.quizQuestion && (
+                          <span className="has-quiz-badge">
+                            <Trophy size={11} /> Has quiz
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="lesson-right">
+                      <div className="lesson-method">{recipe.method}</div>
+                      <div className={`lesson-xp-pill ${complete ? "earned" : ""}`}>
+                        <Zap size={11} />
+                        {complete ? "Earned" : `+${recipe.xpReward} XP`}
+                      </div>
+                    </div>
+                    <button
+                      className="secondary-button"
+                      onClick={() => onOpen(recipe.id)}
+                    >
+                      {complete ? "Practice again" : "Start lesson"}
+                      <ArrowRight size={15} />
+                    </button>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        );
+      })}
 
       <section className="concept-grid">
         <div>

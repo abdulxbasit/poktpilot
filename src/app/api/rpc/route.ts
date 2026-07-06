@@ -28,9 +28,9 @@ function validateParams(method: AllowedMethod, params: unknown[]) {
       params.length !== 2 ||
       typeof params[0] !== "string" ||
       !isAddress(params[0]) ||
-      params[1] !== "latest"
+      (params[1] !== "latest" && params[1] !== "pending" && params[1] !== "earliest")
     ) {
-      return "Balance lookup requires a valid EVM address and the latest block tag.";
+      return "Balance lookup requires a valid EVM address and a block tag (latest/pending/earliest).";
     }
   }
 
@@ -41,6 +41,50 @@ function validateParams(method: AllowedMethod, params: unknown[]) {
       !isTransactionHash(params[0])
     ) {
       return "Transaction lookup requires a valid 32-byte transaction hash.";
+    }
+  }
+
+  if (method === "eth_getTransactionCount") {
+    if (
+      params.length !== 2 ||
+      typeof params[0] !== "string" ||
+      !isAddress(params[0]) ||
+      (params[1] !== "latest" && params[1] !== "pending" && params[1] !== "earliest")
+    ) {
+      return "Transaction count requires a valid EVM address and a block tag.";
+    }
+  }
+
+  if (method === "eth_getBlockByNumber") {
+    if (
+      params.length !== 2 ||
+      (typeof params[0] !== "string") ||
+      typeof params[1] !== "boolean"
+    ) {
+      return "eth_getBlockByNumber requires a block tag/number and a boolean for full transactions.";
+    }
+  }
+
+  if (method === "eth_getCode") {
+    if (
+      params.length !== 2 ||
+      typeof params[0] !== "string" ||
+      !isAddress(params[0]) ||
+      (params[1] !== "latest" && params[1] !== "pending" && params[1] !== "earliest")
+    ) {
+      return "eth_getCode requires a valid EVM address and a block tag.";
+    }
+  }
+
+  if (method === "eth_feeHistory") {
+    if (params.length < 2) {
+      return "eth_feeHistory requires a block count, block tag, and optional reward percentiles.";
+    }
+  }
+
+  if (method === "eth_getLogs") {
+    if (params.length !== 1 || typeof params[0] !== "object" || params[0] === null) {
+      return "eth_getLogs requires a filter object.";
     }
   }
 

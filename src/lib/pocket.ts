@@ -8,16 +8,24 @@ export type Chain = {
   testnet?: boolean;
 };
 
+export type RecipeCategory = "RPC Basics" | "Crypto Fundamentals" | "Advanced RPC";
+
 export type Recipe = {
   id: string;
   method: AllowedMethod;
   title: string;
   description: string;
   skill: string;
+  category: RecipeCategory;
+  xpReward: number;
+  difficulty: 1 | 2 | 3;
   paramLabel?: string;
   paramPlaceholder?: string;
   defaultParams: unknown[];
   resultLabel: string;
+  quizQuestion?: string;
+  quizOptions?: string[];
+  quizAnswerIndex?: number;
 };
 
 export type AllowedMethod =
@@ -25,7 +33,12 @@ export type AllowedMethod =
   | "eth_chainId"
   | "eth_gasPrice"
   | "eth_getBalance"
-  | "eth_getTransactionByHash";
+  | "eth_getTransactionByHash"
+  | "eth_getTransactionCount"
+  | "eth_getBlockByNumber"
+  | "eth_getCode"
+  | "eth_getLogs"
+  | "eth_feeHistory";
 
 export const CHAINS: Chain[] = [
   {
@@ -205,12 +218,16 @@ export const CHAINS: Chain[] = [
 ];
 
 export const RECIPES: Recipe[] = [
+  // ─── RPC Basics ────────────────────────────────────────────────────────────
   {
     id: "latest-block",
     method: "eth_blockNumber",
     title: "Latest block",
     description: "Read the newest block height reported by the network.",
     skill: "RPC basics",
+    category: "RPC Basics",
+    xpReward: 50,
+    difficulty: 1,
     defaultParams: [],
     resultLabel: "Block height",
   },
@@ -220,6 +237,9 @@ export const RECIPES: Recipe[] = [
     title: "Identify a chain",
     description: "Ask the endpoint which EVM chain it is connected to.",
     skill: "Network safety",
+    category: "RPC Basics",
+    xpReward: 50,
+    difficulty: 1,
     defaultParams: [],
     resultLabel: "Chain ID",
   },
@@ -229,6 +249,9 @@ export const RECIPES: Recipe[] = [
     title: "Current gas price",
     description: "Fetch the current gas price estimate from the network.",
     skill: "Fee data",
+    category: "RPC Basics",
+    xpReward: 50,
+    difficulty: 1,
     defaultParams: [],
     resultLabel: "Gas price",
   },
@@ -238,6 +261,9 @@ export const RECIPES: Recipe[] = [
     title: "Wallet balance",
     description: "Read the native token balance for any EVM address.",
     skill: "Addresses + wei",
+    category: "RPC Basics",
+    xpReward: 75,
+    difficulty: 2,
     paramLabel: "Wallet address",
     paramPlaceholder: "0x0000000000000000000000000000000000000000",
     defaultParams: ["0x0000000000000000000000000000000000000000", "latest"],
@@ -249,12 +275,174 @@ export const RECIPES: Recipe[] = [
     title: "Transaction lookup",
     description: "Inspect a transaction using its 32-byte hash.",
     skill: "Transaction data",
+    category: "RPC Basics",
+    xpReward: 75,
+    difficulty: 2,
     paramLabel: "Transaction hash",
     paramPlaceholder: "0x… 64 hexadecimal characters",
     defaultParams: [""],
     resultLabel: "Transaction",
   },
+
+  // ─── Crypto Fundamentals ────────────────────────────────────────────────────
+  {
+    id: "nonce-lookup",
+    method: "eth_getTransactionCount",
+    title: "Account nonce",
+    description: "Discover how many transactions an address has sent — its nonce. Nonces prevent replay attacks and order transactions.",
+    skill: "Nonce & replay",
+    category: "Crypto Fundamentals",
+    xpReward: 100,
+    difficulty: 2,
+    paramLabel: "Wallet address",
+    paramPlaceholder: "0x0000000000000000000000000000000000000000",
+    defaultParams: ["0x0000000000000000000000000000000000000000", "latest"],
+    resultLabel: "Transaction count (nonce)",
+    quizQuestion: "Why does every Ethereum account have a nonce?",
+    quizOptions: [
+      "To set transaction priority fees",
+      "To prevent replay attacks and enforce ordering",
+      "To prove ownership of private keys",
+    ],
+    quizAnswerIndex: 1,
+  },
+  {
+    id: "block-by-number",
+    method: "eth_getBlockByNumber",
+    title: "Block inspector",
+    description: "Fetch a full block object including timestamp, miner, and the list of included transactions.",
+    skill: "Block anatomy",
+    category: "Crypto Fundamentals",
+    xpReward: 100,
+    difficulty: 2,
+    defaultParams: ["latest", false],
+    resultLabel: "Block object",
+    quizQuestion: "What does the 'parentHash' field in a block refer to?",
+    quizOptions: [
+      "The hash of the miner who produced the block",
+      "The hash of the previous block, forming the chain",
+      "A hash of all transaction fees collected",
+    ],
+    quizAnswerIndex: 1,
+  },
+  {
+    id: "contract-code",
+    method: "eth_getCode",
+    title: "Is it a contract?",
+    description: "Check whether an address is a smart contract (returns bytecode) or an EOA (returns 0x). Essential before interacting with any address.",
+    skill: "EOA vs contract",
+    category: "Crypto Fundamentals",
+    xpReward: 100,
+    difficulty: 2,
+    paramLabel: "Address to inspect",
+    paramPlaceholder: "0x0000000000000000000000000000000000000000",
+    defaultParams: ["0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", "latest"],
+    resultLabel: "Deployed bytecode",
+    quizQuestion: "When eth_getCode returns '0x', what does that mean?",
+    quizOptions: [
+      "The contract has no functions",
+      "The address is an Externally Owned Account (EOA), not a contract",
+      "The network is experiencing downtime",
+    ],
+    quizAnswerIndex: 1,
+  },
+  {
+    id: "fee-history",
+    method: "eth_feeHistory",
+    title: "Fee history",
+    description: "Retrieve the historical base fees and priority fees over recent blocks to understand gas market trends.",
+    skill: "EIP-1559 fees",
+    category: "Crypto Fundamentals",
+    xpReward: 125,
+    difficulty: 3,
+    defaultParams: [4, "latest", [25, 75]],
+    resultLabel: "Fee history",
+    quizQuestion: "What does the 'baseFeePerGas' represent in EIP-1559?",
+    quizOptions: [
+      "The tip paid directly to validators",
+      "The minimum fee per gas unit that is burned by the protocol",
+      "The total gas used by all transactions in a block",
+    ],
+    quizAnswerIndex: 1,
+  },
+
+  // ─── Advanced RPC ────────────────────────────────────────────────────────────
+  {
+    id: "pending-nonce",
+    method: "eth_getTransactionCount",
+    title: "Pending nonce",
+    description: "Query the pending nonce to see the count including unconfirmed mempool transactions — useful for nonce management in wallets.",
+    skill: "Mempool & pending",
+    category: "Advanced RPC",
+    xpReward: 150,
+    difficulty: 3,
+    paramLabel: "Wallet address",
+    paramPlaceholder: "0x0000000000000000000000000000000000000000",
+    defaultParams: ["0x0000000000000000000000000000000000000000", "pending"],
+    resultLabel: "Pending transaction count",
+  },
+  {
+    id: "event-logs",
+    method: "eth_getLogs",
+    title: "Read event logs",
+    description: "Fetch on-chain event logs from any block range. Events are the primary way smart contracts communicate state changes.",
+    skill: "Events & logs",
+    category: "Advanced RPC",
+    xpReward: 150,
+    difficulty: 3,
+    defaultParams: [{ fromBlock: "latest", toBlock: "latest", topics: [] }],
+    resultLabel: "Log entries",
+  },
+  {
+    id: "advanced-block",
+    method: "eth_getBlockByNumber",
+    title: "Block with txns",
+    description: "Fetch a block and request the full transaction objects (not just hashes) to inspect every on-chain action in that block.",
+    skill: "Full block data",
+    category: "Advanced RPC",
+    xpReward: 150,
+    difficulty: 3,
+    defaultParams: ["latest", true],
+    resultLabel: "Block with full transactions",
+  },
 ];
+
+// ─── XP Level System ─────────────────────────────────────────────────────────
+
+export type Level = {
+  level: number;
+  title: string;
+  minXp: number;
+  maxXp: number;
+  color: string;
+};
+
+export const LEVELS: Level[] = [
+  { level: 1, title: "Node Rookie",     minXp: 0,    maxXp: 299,  color: "#64748b" },
+  { level: 2, title: "Chain Explorer",  minXp: 300,  maxXp: 699,  color: "#3b82f6" },
+  { level: 3, title: "Block Wizard",    minXp: 700,  maxXp: 1199, color: "#8b5cf6" },
+  { level: 4, title: "Gas Guru",        minXp: 1200, maxXp: 1899, color: "#f59e0b" },
+  { level: 5, title: "POKT Master",     minXp: 1900, maxXp: 9999, color: "#10b981" },
+];
+
+export function getLevelInfo(xp: number): Level & { progress: number } {
+  const level = LEVELS.findLast((l) => xp >= l.minXp) ?? LEVELS[0];
+  const range = level.maxXp - level.minXp;
+  const progress = Math.min(100, Math.round(((xp - level.minXp) / range) * 100));
+  return { ...level, progress };
+}
+
+export const CATEGORY_ORDER: RecipeCategory[] = [
+  "RPC Basics",
+  "Crypto Fundamentals",
+  "Advanced RPC",
+];
+
+export const CATEGORY_XP_BONUS: Record<RecipeCategory, number> = {
+  "RPC Basics": 200,
+  "Crypto Fundamentals": 300,
+  "Advanced RPC": 400,
+};
 
 export const ALLOWED_METHODS = new Set<AllowedMethod>(
   RECIPES.map((recipe) => recipe.method),
@@ -314,6 +502,16 @@ export function explainMethod(method: AllowedMethod) {
       "This method reads an address's native token balance at a block tag. The result arrives in wei, the smallest native-token unit.",
     eth_getTransactionByHash:
       "This method asks the chain for a transaction object matching the supplied hash. A null result usually means the hash is unknown on this network.",
+    eth_getTransactionCount:
+      "This method returns the number of transactions sent from an address (its nonce). Nonces prevent replay attacks and ensure transactions execute in order.",
+    eth_getBlockByNumber:
+      "This method fetches a complete block object by block number or tag. Blocks contain the miner, timestamp, gas data, and all included transactions.",
+    eth_getCode:
+      "This method returns the bytecode deployed at an address. An empty result (0x) means the address is a regular wallet (EOA), not a smart contract.",
+    eth_getLogs:
+      "This method retrieves event logs matching a filter — the primary way decentralized apps track smart contract state changes without polling transactions.",
+    eth_feeHistory:
+      "This method returns historical base fees and priority fees per gas over a range of blocks, enabling accurate EIP-1559 gas price estimation.",
   };
 
   return explanations[method];
@@ -342,11 +540,19 @@ export function parseNaturalLanguage(input: string) {
     recipe = RECIPES.find((item) => item.id === "gas-price") ?? recipe;
   } else if (normalized.includes("chain id") || normalized.includes("network id")) {
     recipe = RECIPES.find((item) => item.id === "chain-id") ?? recipe;
+  } else if (normalized.includes("nonce") || normalized.includes("count")) {
+    recipe = RECIPES.find((item) => item.id === "nonce-lookup") ?? recipe;
+  } else if (normalized.includes("block") || normalized.includes("inspector")) {
+    recipe = RECIPES.find((item) => item.id === "block-by-number") ?? recipe;
+  } else if (normalized.includes("contract") || normalized.includes("code")) {
+    recipe = RECIPES.find((item) => item.id === "contract-code") ?? recipe;
+  } else if (normalized.includes("log") || normalized.includes("event")) {
+    recipe = RECIPES.find((item) => item.id === "event-logs") ?? recipe;
   }
 
   const hexValues = input.match(/0x[a-fA-F0-9]+/g) ?? [];
   const parameter = hexValues.find((value) =>
-    recipe.id === "wallet-balance"
+    recipe.id === "wallet-balance" || recipe.id === "nonce-lookup" || recipe.id === "contract-code" || recipe.id === "pending-nonce"
       ? isAddress(value)
       : recipe.id === "transaction"
         ? isTransactionHash(value)
