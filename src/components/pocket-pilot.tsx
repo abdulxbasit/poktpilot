@@ -283,9 +283,7 @@ export function PocketPilot() {
   const [chainSlug, setChainSlug] = useState("eth");
   const [recipeId, setRecipeId] = useState("latest-block");
   const [parameter, setParameter] = useState("");
-  const [prompt, setPrompt] = useState(
-    "Show me the latest block on Ethereum",
-  );
+  const [prompt, setPrompt] = useState("");
   const [payload, setPayload] = useState<RpcPayload | null>(null);
   const [history, setHistory] = useState<RpcPayload[]>([]);
   const [language, setLanguage] = useState<CodeLanguage>("curl");
