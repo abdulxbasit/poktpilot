@@ -13,6 +13,7 @@ import {
   Download,
   ExternalLink,
   Gauge,
+  Gamepad2,
   GraduationCap,
   Hexagon,
   History,
@@ -35,6 +36,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import { RpcExplorerGame } from "./rpc-explorer-game";
 import Image from "next/image";
 import {
   type CSSProperties,
@@ -85,7 +87,7 @@ type RpcPayload = {
   error?: string;
 };
 
-type ViewMode = "playground" | "lessons";
+type ViewMode = "playground" | "lessons" | "game";
 type CodeLanguage = "curl" | "javascript" | "python" | "viem";
 
 type XpToast = { id: number; amount: number; label?: string };
@@ -639,6 +641,17 @@ export function PocketPilot() {
               {progress.length}/{RECIPES.length}
             </span>
           </button>
+          <button
+            className={view === "game" ? "nav-item active" : "nav-item"}
+            onClick={() => {
+              setView("game");
+              setSidebarOpen(false);
+            }}
+          >
+            <Gamepad2 size={17} />
+            RPC Explorer
+            <span className="nav-badge-new">NEW</span>
+          </button>
         </nav>
 
         <div className="sidebar-section">
@@ -711,12 +724,18 @@ export function PocketPilot() {
         <div className="workspace-header">
           <div>
             <p className="eyebrow">
-              {view === "playground" ? "RPC workspace" : "Guided curriculum"}
+              {view === "playground"
+                ? "RPC workspace"
+                : view === "game"
+                  ? "Pixel World"
+                  : "Guided curriculum"}
             </p>
             <h1>
               {view === "playground"
                 ? "Learn the request. Trust the response."
-                : "Build RPC intuition one query at a time."}
+                : view === "game"
+                  ? "Explore the network, Node Runner."
+                  : "Build RPC intuition one query at a time."}
             </h1>
           </div>
           <div className="desktop-status">
@@ -909,7 +928,7 @@ export function PocketPilot() {
                   </label>
                 </section>
               </section>
-            <section
+              <section
                 className="composer-panel"
                 onKeyDown={(event) => {
                   if (
@@ -1302,7 +1321,7 @@ export function PocketPilot() {
               </section>
             ) : null}
           </>
-        ) : (
+        ) : view === "lessons" ? (
           <LearningPath
             progress={progress}
             xp={xp}
@@ -1315,6 +1334,24 @@ export function PocketPilot() {
             onShare={(text) => {
               navigator.clipboard.writeText(text);
               addXpToast(0, "Rank copied to clipboard!");
+            }}
+          />
+        ) : (
+          <RpcExplorerGame
+            xp={xp}
+            progress={progress}
+            onStationComplete={(recipeId, xpAmount, label) => {
+              awardXp(xpAmount, `Completed ${label}`);
+              if (!progress.includes(recipeId)) {
+                setProgress((prev) => [...prev, recipeId]);
+              }
+            }}
+            onItemCollect={(xpAmount, label) => {
+              awardXp(xpAmount, `Collected ${label}`);
+            }}
+            onSwitchToPlayground={(recipeId) => {
+              chooseRecipe(recipeId);
+              setView("playground");
             }}
           />
         )}

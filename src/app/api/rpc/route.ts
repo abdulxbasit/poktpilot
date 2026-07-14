@@ -210,6 +210,7 @@ export async function POST(request: Request) {
         signal: AbortSignal.timeout(12_000),
       });
       const latencyMs = Math.round(performance.now() - startedAt);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data = (await response.json()) as any;
 
       if (!response.ok) {
@@ -225,6 +226,7 @@ export async function POST(request: Request) {
         );
       }
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let formattedResult: any = null;
       if (data.result) {
         switch (method) {
