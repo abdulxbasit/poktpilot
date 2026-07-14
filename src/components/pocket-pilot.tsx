@@ -302,6 +302,12 @@ export function PocketPilot() {
   const [aiResponse, setAiResponse] = useState<AiResponseData | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [lastActivePrompt, setLastActivePrompt] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [lastActivePrompt, aiLoading, aiResponse, aiError]);
 
   // Quiz state
   const [quizAnswer, setQuizAnswer] = useState<number | null>(null);
@@ -435,7 +441,10 @@ export function PocketPilot() {
   }
 
   async function planFromPrompt() {
-    if (!prompt.trim()) return;
+    const currentPrompt = prompt.trim();
+    if (!currentPrompt) return;
+    setLastActivePrompt(currentPrompt);
+    setPrompt(""); // Clear input on submit
     setAiResponse(null);
     setAiError(null);
     setAiLoading(true);
@@ -445,7 +454,7 @@ export function PocketPilot() {
       const response = await fetch("/api/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: prompt }),
+        body: JSON.stringify({ query: currentPrompt }),
       });
 
       if (!response.ok) {
@@ -462,7 +471,7 @@ export function PocketPilot() {
     } catch (err) {
       console.error("AI query failed, falling back:", err);
       // Fallback to local parsing
-      const planned = parseNaturalLanguage(prompt);
+      const planned = parseNaturalLanguage(currentPrompt);
       setChainSlug(planned.chain.slug);
       chooseRecipe(planned.recipe.id);
       if (planned.parameter) setParameter(planned.parameter);
@@ -717,162 +726,190 @@ export function PocketPilot() {
 
         {view === "playground" ? (
           <>
-            <section className="assistant-strip">
-              <div className="assistant-mark">
-                <Sparkles size={18} />
-              </div>
-              <label htmlFor="natural-query">
-                <span>Describe the chain data you want</span>
-                <div className="prompt-row">
-                  <input
-                    id="natural-query"
-                    value={prompt}
-                    onChange={(event) => setPrompt(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") planFromPrompt();
-                    }}
-                    placeholder="Try: Check this wallet balance on Base"
-                  />
-                  <button
-                    className="secondary-button"
-                    onClick={planFromPrompt}
-                  >
-                    Plan query <ArrowRight size={16} />
-                  </button>
-                </div>
-              </label>
-            </section>
-
-            {/* ─── AI Response Panel ─────────────────────────────────── */}
-            {aiLoading && (
-              <section className="ai-response-panel ai-loading-state">
-                <div className="ai-panel-header">
-                  <div className="ai-panel-icon">
-                    <Sparkles size={18} className="ai-spin" />
-                  </div>
-                  <div>
-                    <strong>PocketPilot AI is thinking…</strong>
-                    <p>Analyzing your query and finding the best recipe</p>
-                  </div>
-                </div>
-                <div className="ai-skeleton">
-                  <div className="ai-skeleton-line wide" />
-                  <div className="ai-skeleton-line" />
-                  <div className="ai-skeleton-line narrow" />
-                </div>
-              </section>
-            )}
-
-            {aiError && !aiResponse && (
-              <section className="ai-response-panel ai-error-state">
-                <div className="ai-panel-header">
-                  <div className="ai-panel-icon fallback">
-                    <Sparkles size={18} />
-                  </div>
-                  <div>
-                    <strong>Smart match applied</strong>
-                    <p>{aiError}</p>
-                  </div>
-                </div>
-              </section>
-            )}
-
-            {aiResponse && !aiLoading && (
-              <section className="ai-response-panel ai-visible">
-                <button
-                  className="ai-panel-close"
-                  onClick={() => setAiResponse(null)}
-                  aria-label="Close AI response"
-                  title="Dismiss"
-                >
-                  <X size={14} />
-                </button>
-
-                <div className="ai-layout-grid">
-                  {/* Left Column: Core Concept & Specifications */}
-                  <div className="ai-layout-left">
-                    <div className="ai-header-inline">
-                      <Sparkles size={14} className="ai-accent-icon" />
-                      <span>Tutor insights</span>
-                      <span className="ai-source-badge">
-                        {aiResponse.source === "ai" ? "Gemini" : "Smart Match"}
-                      </span>
+            <div className="work-grid">
+              <section className="ai-chat-panel">
+                <div className="chat-messages-container">
+                  {/* Welcome Message */}
+                  <div className="chat-msg tutor">
+                    <div className="chat-avatar tutor">
+                      <Sparkles size={14} />
                     </div>
-
-                    <h2 className="ai-concept-title">Core concept</h2>
-                    <p className="ai-text-desc">
-                      {aiResponse.explanation.whatThisDoes}
-                    </p>
-
-                    <h3 className="ai-subtitle-specs">Technical specifications</h3>
-                    <ul className="ai-specs-list">
-                      {aiResponse.explanation.technicalDetails.map((detail, index) => (
-                        <li key={index}>
-                          <span className="ai-bullet" />
-                          <span>{detail}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  {/* Right Column: Infrastructure & Practice pathway */}
-                  <div className="ai-layout-right">
-                    <div className="ai-card-right">
-                      <div className="ai-header-inline">
-                        <Globe size={13} className="ai-accent-icon-green" />
-                        <span>POKT Infrastructure</span>
-                      </div>
-                      <p className="ai-text-desc-small">
-                        {aiResponse.explanation.howPoktPowersThis}
+                    <div className="chat-bubble tutor welcome">
+                      <p>
+                        Hello! I&apos;m your POKTPilot tutor. What chain data
+                        would you like to retrieve? Try typing something like:{" "}
+                        <em>Show me the latest block on Ethereum</em> or{" "}
+                        <em>Get the current gas price on Polygon</em>.
                       </p>
                     </div>
+                  </div>
 
-                    <div className="ai-card-right highlight">
-                      <div className="ai-header-inline">
-                        <BookMarked size={13} className="ai-accent-icon-amber" />
-                        <span>Practice pathway</span>
+                  {/* User query bubble */}
+                  {lastActivePrompt && (
+                    <div className="chat-msg user">
+                      <div className="chat-avatar user">U</div>
+                      <div className="chat-bubble user">
+                        {lastActivePrompt}
                       </div>
-                      <p className="ai-text-desc-small">
-                        {aiResponse.explanation.suggestedRecipeNote}
-                      </p>
-                      <button
-                        className="ai-action-btn"
-                        onClick={() => {
-                          setAiResponse(null);
-                          const target = document.querySelector(".composer-panel");
-                          target?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    </div>
+                  )}
+
+                  {/* Loading tutor message */}
+                  {aiLoading && (
+                    <div className="chat-msg tutor">
+                      <div className="chat-avatar tutor">
+                        <Sparkles size={14} />
+                      </div>
+                      <section className="ai-response-panel ai-loading-state">
+                        <div className="ai-panel-header">
+                          <div className="ai-panel-icon">
+                            <Sparkles size={18} className="ai-spin" />
+                          </div>
+                          <div>
+                            <strong>PocketPilot AI is thinking…</strong>
+                            <p>Analyzing your query and finding the best recipe</p>
+                          </div>
+                        </div>
+                        <div className="ai-skeleton">
+                          <div className="ai-skeleton-line wide" />
+                          <div className="ai-skeleton-line" />
+                          <div className="ai-skeleton-line narrow" />
+                        </div>
+                      </section>
+                    </div>
+                  )}
+
+                  {/* Fallback / Keyword match message */}
+                  {aiError && !aiResponse && (
+                    <div className="chat-msg tutor">
+                      <div className="chat-avatar tutor">
+                        <Sparkles size={14} />
+                      </div>
+                      <section className="ai-response-panel ai-error-state">
+                        <div className="ai-panel-header">
+                          <div className="ai-panel-icon fallback">
+                            <Sparkles size={18} />
+                          </div>
+                          <div>
+                            <strong>Smart match applied</strong>
+                            <p>{aiError}</p>
+                          </div>
+                        </div>
+                      </section>
+                    </div>
+                  )}
+
+                  {/* Success response message */}
+                  {aiResponse && !aiLoading && (
+                    <div className="chat-msg tutor">
+                      <div className="chat-avatar tutor">
+                        <Sparkles size={14} />
+                      </div>
+                      <section className="ai-response-panel ai-visible">
+                        <button
+                          className="ai-panel-close"
+                          onClick={() => {
+                            setAiResponse(null);
+                            setLastActivePrompt(null);
+                          }}
+                          aria-label="Close AI response"
+                          title="Dismiss"
+                        >
+                          <X size={14} />
+                        </button>
+
+                        <div className="ai-layout-grid">
+                          {/* Core Concept & Specifications */}
+                          <div className="ai-layout-left">
+                            <div className="ai-header-inline">
+                              <Sparkles size={14} className="ai-accent-icon" />
+                              <span>Tutor insights</span>
+                              <span className="ai-source-badge">
+                                {aiResponse.source === "ai" ? "Gemma" : "Smart Match"}
+                              </span>
+                            </div>
+
+                            <h2 className="ai-concept-title">Core concept</h2>
+                            <p className="ai-text-desc">
+                              {aiResponse.explanation.whatThisDoes}
+                            </p>
+
+                            <h3 className="ai-subtitle-specs">Technical specifications</h3>
+                            <ul className="ai-specs-list">
+                              {aiResponse.explanation.technicalDetails.map((detail, index) => (
+                                <li key={index}>
+                                  <span className="ai-bullet" />
+                                  <span>{detail}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+
+                          {/* Infrastructure & Practice pathway */}
+                          <div className="ai-layout-right">
+                            <div className="ai-card-right">
+                              <div className="ai-header-inline">
+                                <Globe size={13} className="ai-accent-icon-green" />
+                                <span>POKT Infrastructure</span>
+                              </div>
+                              <p className="ai-text-desc-small">
+                                {aiResponse.explanation.howPoktPowersThis}
+                              </p>
+                            </div>
+
+                            <div className="ai-card-right highlight">
+                              <div className="ai-header-inline">
+                                <BookMarked size={13} className="ai-accent-icon-amber" />
+                                <span>Practice pathway</span>
+                              </div>
+                              <p className="ai-text-desc-small">
+                                {aiResponse.explanation.suggestedRecipeNote}
+                              </p>
+                              <button
+                                className="ai-action-btn"
+                                onClick={() => {
+                                  const target = document.querySelector(".composer-panel");
+                                  target?.scrollIntoView({ behavior: "smooth", block: "start" });
+                                }}
+                              >
+                                Start lesson
+                                <ChevronRight size={13} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </section>
+                    </div>
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+
+                <section className="assistant-strip">
+                  <label htmlFor="natural-query">
+                    <span>Ask the RPC AI tutor</span>
+                    <div className="prompt-row">
+                      <input
+                        id="natural-query"
+                        value={prompt}
+                        onChange={(event) => setPrompt(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") planFromPrompt();
                         }}
+                        placeholder="Try: Check this wallet balance on Base"
+                      />
+                      <button
+                        className="chat-submit-btn"
+                        onClick={planFromPrompt}
+                        title="Plan query"
+                        aria-label="Plan query"
                       >
-                        Start lesson
-                        <ChevronRight size={13} />
+                        <ArrowRight size={16} />
                       </button>
                     </div>
-                  </div>
-                </div>
+                  </label>
+                </section>
               </section>
-            )}
-
-            {/* Recipe info banner with XP reward */}
-            <div className="recipe-meta-banner">
-              <div className="recipe-meta-left">
-                <span className={`category-badge cat-${recipe.category.toLowerCase().replace(/\s/g, "-")}`}>
-                  {recipe.category}
-                </span>
-                <DifficultyStars difficulty={recipe.difficulty} />
-              </div>
-              <div className="recipe-xp-reward">
-                <Zap size={14} />
-                <span>+{recipe.xpReward} XP on completion</span>
-                {progress.includes(recipe.id) && (
-                  <span className="already-earned">
-                    <Check size={12} /> Earned
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <div className="work-grid">
-              <section
+            <section
                 className="composer-panel"
                 onKeyDown={(event) => {
                   if (
@@ -1004,16 +1041,16 @@ export function PocketPilot() {
                       {JSON.stringify(
                         chain.family === "Cosmos"
                           ? {
-                              jsonrpc: "2.0",
-                              ...mapEvmToCosmosRpc(recipe.method, params),
-                              id: 1,
-                            }
+                            jsonrpc: "2.0",
+                            ...mapEvmToCosmosRpc(recipe.method, params),
+                            id: 1,
+                          }
                           : {
-                              jsonrpc: "2.0",
-                              method: recipe.method,
-                              params,
-                              id: 1,
-                            },
+                            jsonrpc: "2.0",
+                            method: recipe.method,
+                            params,
+                            id: 1,
+                          },
                         null,
                         2,
                       )}

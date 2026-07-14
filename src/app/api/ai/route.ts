@@ -166,8 +166,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  const model = process.env.OPENROUTER_MODEL || "google/gemma-4-26b-a4b-it:free";
 
   if (!apiKey) {
     // Fallback to local parsing when no API key
@@ -187,47 +187,54 @@ export async function POST(request: Request) {
   }
 
   try {
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-
-    const geminiResponse = await fetch(geminiUrl, {
+    const openRouterResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+        "HTTP-Referer": "https://poktpilot.vercel.app",
+        "X-Title": "POKTPilot RPC Learning Lab",
+      },
       body: JSON.stringify({
-        contents: [
+        model,
+        messages: [
+          {
+            role: "system",
+            content: buildSystemPrompt(),
+          },
           {
             role: "user",
-            parts: [{ text: query }],
+            content: query,
           },
         ],
-        systemInstruction: {
-          parts: [{ text: buildSystemPrompt() }],
-        },
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 1000,
-          responseMimeType: "application/json",
-        },
+        temperature: 0.3,
+        max_tokens: 1000,
       }),
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(20_000),
     });
 
-    if (!geminiResponse.ok) {
-      const errText = await geminiResponse.text();
-      console.error("Gemini API error:", geminiResponse.status, errText);
-      throw new Error(`Gemini returned HTTP ${geminiResponse.status}`);
+    if (!openRouterResponse.ok) {
+      const errText = await openRouterResponse.text();
+      console.error("OpenRouter API error:", openRouterResponse.status, errText);
+      throw new Error(`OpenRouter returned HTTP ${openRouterResponse.status}`);
     }
 
-    const geminiData = await geminiResponse.json();
-    const rawText =
-      geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    const orData = await openRouterResponse.json();
+    const rawText: string = orData?.choices?.[0]?.message?.content ?? "";
 
-    // Parse the JSON from Gemini's response
+    // Strip any accidental markdown code fences Gemma might add
+    const cleaned = rawText
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/\s*```$/i, "")
+      .trim();
+
+    // Parse the JSON from OpenRouter's response
     let parsed: AiResponse;
     try {
-      parsed = JSON.parse(rawText) as AiResponse;
+      parsed = JSON.parse(cleaned) as AiResponse;
     } catch {
-      console.error("Failed to parse Gemini JSON:", rawText);
-      throw new Error("Gemini returned invalid JSON");
+      console.error("Failed to parse OpenRouter JSON:", rawText);
+      throw new Error("OpenRouter returned invalid JSON");
     }
 
     // Validate the recipe ID exists
@@ -242,8 +249,9 @@ export async function POST(request: Request) {
       parsed.chainSlug = "eth";
     }
 
-    // Ensure technicalDetails exists
-    if (!parsed.explanation.technicalDetails || !Array.isArray(parsed.explanation.technicalDetails)) {
+    // Ensure technicalDetails exists and is an array
+    if (!parsed.explanation?.technicalDetails || !Array.isArray(parsed.explanation.technicalDetails)) {
+      parsed.explanation = parsed.explanation ?? {} as AiResponse["explanation"];
       parsed.explanation.technicalDetails = getLocalTechnicalDetails(validRecipe ? validRecipe.method : "eth_blockNumber");
     }
 

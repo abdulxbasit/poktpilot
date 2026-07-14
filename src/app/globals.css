@@ -326,12 +326,12 @@ summary:focus-visible {
 .workspace {
   min-height: 100vh;
   margin-left: var(--sidebar);
-  padding: 34px clamp(22px, 4vw, 62px) 64px;
+  padding: 24px 20px 48px;
 }
 
 .workspace-header {
   display: flex;
-  max-width: 1440px;
+  max-width: 100%;
   align-items: end;
   justify-content: space-between;
   margin: 0 auto 24px;
@@ -379,69 +379,84 @@ summary:focus-visible {
 }
 
 .assistant-strip {
-  display: grid;
-  max-width: 1440px;
-  grid-template-columns: 42px 1fr;
-  gap: 12px;
-  margin: 0 auto 16px;
-  padding: 14px;
-  border: 1px solid #a9b9ee;
-  border-radius: var(--radius);
-  background: var(--blue-soft);
-  box-shadow: 3px 3px 0 #cbd5fa;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
 }
 
 .assistant-mark {
-  display: grid;
-  width: 42px;
-  height: 42px;
-  place-items: center;
-  border-radius: 6px;
-  color: var(--white);
-  background: var(--blue);
+  display: none;
 }
 
 .assistant-strip label > span {
   display: block;
-  margin-bottom: 7px;
-  color: #34405d;
-  font-size: 10px;
-  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .prompt-row {
   display: flex;
-  gap: 8px;
+  position: relative;
+  align-items: center;
 }
 
 .prompt-row input {
-  min-width: 0;
-  height: 38px;
-  flex: 1;
-  padding: 0 12px;
-  border: 1px solid #aebbe4;
-  border-radius: 5px;
+  width: 100%;
+  height: 48px;
+  padding: 0 48px 0 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 24px;
   color: var(--ink);
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--white);
+  font-size: 14px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
   outline: none;
+  transition: all 0.2s ease;
 }
 
 .prompt-row input:focus {
-  border-color: var(--blue);
-  box-shadow: 0 0 0 3px rgba(34, 92, 255, 0.12);
+  border-color: var(--black);
+  box-shadow: 0 0 0 3px rgba(17, 18, 20, 0.06);
+}
+
+.prompt-row .chat-submit-btn {
+  position: absolute;
+  right: 6px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+  border: none;
+  background: var(--black);
+  color: var(--white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.prompt-row .chat-submit-btn:hover {
+  background: var(--green);
+  color: var(--black);
 }
 
 /* ─── AI Response Panel ────────────────────────────────────────────────────── */
 
 .ai-response-panel {
   position: relative;
-  max-width: 1440px;
-  margin: 0 auto 16px;
-  padding: 18px 20px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
+  margin: 0;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
   background: var(--panel);
-  box-shadow: 3px 3px 0 var(--line-strong);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
   animation: aiSlideIn 0.3s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -481,7 +496,7 @@ summary:focus-visible {
 /* AI Layout Grid */
 .ai-layout-grid {
   display: grid;
-  grid-template-columns: 1.15fr 0.85fr;
+  grid-template-columns: 1fr;
   gap: 24px;
   align-items: start;
 }
@@ -739,20 +754,146 @@ summary:focus-visible {
 
 .work-grid {
   display: grid;
-  max-width: 1440px;
-  grid-template-columns: minmax(0, 1.04fr) minmax(360px, 0.96fr);
+  width: 100%;
+  max-width: 100%;
+  grid-template-columns: minmax(320px, 1fr) minmax(0, 1.25fr) minmax(360px, 1.25fr);
   margin: 0 auto;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   background: var(--panel);
   box-shadow: 4px 4px 0 #d0d0cc;
-  overflow: visible;
+  overflow: hidden;
+  min-height: 560px;
+  height: clamp(560px, calc(100vh - 260px), 720px);
+}
+
+.ai-chat-panel,
+.composer-panel,
+.result-panel {
+  min-width: 0;
+  padding: clamp(12px, 1.8vw, 20px);
+  height: 100%;
+  overflow: hidden;
 }
 
 .composer-panel,
 .result-panel {
-  min-width: 0;
-  padding: clamp(18px, 2.4vw, 30px);
+  overflow-y: auto;
+}
+
+.ai-chat-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border-right: 1px solid var(--line-strong);
+  background: var(--white);
+  padding: 0 !important;
+}
+
+.chat-messages-container {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.chat-messages-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-messages-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-messages-container::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 3px;
+}
+
+.chat-messages-container::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
+.chat-msg {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.chat-msg.user {
+  justify-content: flex-end;
+}
+
+.chat-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.chat-avatar.user {
+  background: var(--black);
+  color: var(--white);
+}
+
+.chat-avatar.tutor {
+  background: var(--blue-soft);
+  color: var(--blue);
+  border: 1px solid #cbd5fa;
+}
+
+.chat-bubble {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink);
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.chat-bubble.user {
+  background: var(--blue);
+  color: var(--white);
+  border-radius: 16px;
+  border-bottom-right-radius: 4px;
+  padding: 8px 12px;
+  max-width: 80%;
+  box-shadow: 0 2px 8px rgba(34, 92, 255, 0.12);
+  word-break: break-all;
+}
+
+.chat-bubble.tutor.welcome {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  border-bottom-left-radius: 4px;
+  padding: 10px 14px;
+  max-width: 85%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.01);
+}
+
+.chat-bubble.tutor.welcome p {
+  margin: 0;
+  color: #4a4d55;
+  line-height: 1.5;
+}
+
+.chat-msg .ai-response-panel {
+  flex: 1;
+  max-width: calc(100% - 34px);
+}
+
+.assistant-strip {
+  padding: 14px 18px;
+  border-top: 1px solid var(--line-strong);
+  background: var(--panel);
 }
 
 .composer-panel {
@@ -2009,6 +2150,16 @@ pre {
 @media (max-width: 1080px) {
   .work-grid {
     grid-template-columns: 1fr;
+    height: auto;
+    min-height: unset;
+  }
+
+  .ai-chat-panel,
+  .composer-panel,
+  .result-panel {
+    height: auto;
+    min-height: 500px;
+    overflow-y: auto;
   }
 
   .composer-panel {
